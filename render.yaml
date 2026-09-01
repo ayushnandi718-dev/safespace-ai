@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: safespace-ai-api
+    runtime: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: Dockerfile
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./safespace.db
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        value: openai/gpt-oss-120b
+      - key: CORS_ORIGINS
+        value: '["https://frontend-gray-one-b7w5ul743a.vercel.app"]'
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
+      - key: CONFIRM_REAL_CALL
+        value: "false"
