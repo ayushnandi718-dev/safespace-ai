@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     CONFIRM_REAL_CALL: bool = False
     CORS_ORIGINS: List[str] = ["http://localhost:3000"]
     RATE_LIMIT_ENABLED: bool = True
+    RENDER_API_KEY: str = ""
 
     class Config:
         env_file = ".env"
