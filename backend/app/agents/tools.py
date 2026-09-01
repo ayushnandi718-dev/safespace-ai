@@ -1,0 +1,108 @@
+from langchain_core.tools import tool
+from app.core.config import settings
+
+@tool
+def ask_mental_health_specialist(query: str) -> str:
+    """Provide empathetic, non-diagnostic mental-health support and guidance.
+    Use this for emotional support, stress, anxiety, coping strategies, or
+    general psychological guidance."""
+    from langchain_groq import ChatGroq
+
+    if not settings.GROQ_API_KEY:
+        return (
+            "I understand you're going through a difficult time. While I'm experiencing "
+            "a technical limitation right now, I want you to know that your feelings are "
+            "valid. Please consider reaching out to a mental health professional or "
+            "trusted person in your life."
+        )
+
+    llm = ChatGroq(model=settings.LLM_MODEL, temperature=0.7, max_tokens=600, api_key=settings.GROQ_API_KEY)
+
+    specialist_prompt = (
+        "You are a warm, empathetic support companion (not a licensed professional). "
+        "Respond naturally to the user's message: "
+        "- Acknowledge and validate their feelings. "
+        "- Normalize their experience gently. "
+        "- Offer practical, general wellness suggestions as optional ideas. "
+        "- Ask one open-ended question to encourage reflection. "
+        "- Keep it concise and conversational. "
+        "- Never diagnose, never prescribe, never claim to be a therapist or doctor."
+    )
+
+    try:
+        response = llm.invoke([
+            ("system", specialist_prompt),
+            ("user", query),
+        ])
+        return response.content.strip()
+    except Exception:
+        return (
+            "I'm having a technical issue right now, but your feelings matter. "
+            "Please try again in a moment."
+        )
+
+@tool
+def locate_therapist_tool(location: str) -> str:
+    """Provide guidance for finding licensed mental-health professionals.
+    Use when the user asks for therapists, counselors, psychologists, or
+    nearby professional mental-health resources near a given location."""
+    loc = location.strip() if location else ""
+    if not loc:
+        return "Could you share your city or area so I can help you find relevant resources?"
+
+    return (
+        f"Here's how to find quality mental health support near {loc}:\n\n"
+        "1. Psychology Today Directory: psychologytoday.com/us/therapists\n"
+        "   - Filter by location, insurance, and specialty\n\n"
+        "2. Ask your primary-care doctor for a referral\n\n"
+        "3. Check with local mental health boards or hospitals\n\n"
+        "4. Online therapy platforms like BetterHelp or Talkspace\n\n"
+        "Questions to ask before booking:\n"
+        "- Are you licensed, and in what specialty?\n"
+        "- What is your approach?\n"
+        "- What are the fees, and do you accept insurance?\n\n"
+        "If you need urgent help, call a local emergency number "
+        "(911 in the US, 112 in the EU, 100 in India) or the Crisis Text Line "
+        "(text HOME to 741741)."
+    )
+
+@tool
+def emergency_call_tool() -> str:
+    """Trigger the crisis-safe escalation workflow.
+    Use ONLY for immediate danger, credible self-harm or suicidal intent,
+    or intent to harm others. Simulation by default."""
+    have_twilio = all([
+        settings.TWILIO_ACCOUNT_SID,
+        settings.TWILIO_AUTH_TOKEN,
+        settings.TWILIO_FROM_NUMBER,
+        settings.EMERGENCY_CONTACT,
+    ])
+
+    if not have_twilio:
+        return (
+            "[SIMULATION] Emergency support escalation triggered. "
+            "If you are in immediate danger, please call your local emergency number now "
+            "(911 in the US, 112 in the EU, 100 in India)."
+        )
+
+    if not settings.CONFIRM_REAL_CALL:
+        return (
+            "[SIMULATION] Emergency support escalation has been simulated. "
+            "For immediate danger, contact your local emergency services now. "
+            "You matter — please reach out to a trusted person nearby."
+        )
+
+    try:
+        from twilio.rest import Client as TwilioClient
+        client = TwilioClient(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+        client.messages.create(
+            body="SafeSpace AI emergency alert. A user needs immediate support.",
+            from_=settings.TWILIO_FROM_NUMBER,
+            to=settings.EMERGENCY_CONTACT,
+        )
+        return "Your emergency contact has been notified."
+    except Exception:
+        return (
+            "Unable to send the emergency notification. If you are in danger, "
+            "please call local emergency services (911 in the US) right now."
+        )
