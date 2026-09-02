@@ -50,6 +50,36 @@ def locate_therapist_tool(location: str) -> str:
     if not loc:
         return "Could you share your city or area so I can help you find relevant resources?"
 
+    if settings.IPGEOLOCATION_API_KEY:
+        try:
+            import httpx
+            geo = httpx.get(
+                "https://api.ipgeolocation.io/ipgeo",
+                params={"apiKey": settings.IPGEOLOCATION_API_KEY},
+                timeout=10,
+            ).json()
+            city = geo.get("city") or ""
+            country = geo.get("country_name") or ""
+            state = geo.get("state_prov") or ""
+            lat = geo.get("latitude")
+            lng = geo.get("longitude")
+            geo_area = ", ".join(x for x in [city, state, country] if x)
+            map_url = ""
+            if lat and lng:
+                map_url = f" (map: https://www.google.com/maps/search/therapist+near+{lat},{lng})"
+            area_note = f" near {geo_area}" if geo_area else f" near {loc}"
+            return (
+                f"I found general resources for you{area_note}{map_url}.\n\n"
+                "1. Psychology Today Directory: psychologytoday.com/us/therapists\n"
+                "2. Ask your primary-care doctor for a referral\n"
+                "3. Local mental health boards or hospitals\n"
+                "4. Online platforms like BetterHelp or Talkspace\n\n"
+                "If you need urgent help, contact a local emergency number "
+                "(911 in the US, 112 in the EU, 100 in India) or text HOME to 741741."
+            )
+        except Exception:
+            pass
+
     return (
         f"Here's how to find quality mental health support near {loc}:\n\n"
         "1. Psychology Today Directory: psychologytoday.com/us/therapists\n"
