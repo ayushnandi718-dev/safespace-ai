@@ -85,8 +85,8 @@ const quickActions = [
     iconColor: "text-accent-blue",
   },
   {
-    title: "Find a Therapist",
-    description: "Discover professional support",
+    title: "Find Healthcare Near You",
+    description: "Doctors, clinics, hospitals & more",
     href: "/find-support",
     icon: Stethoscope,
     color: "from-accent-teal/20 to-accent-blue/20",

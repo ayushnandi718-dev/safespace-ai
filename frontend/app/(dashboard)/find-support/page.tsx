@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Search,
@@ -18,31 +19,51 @@ import { ApiError } from "@/lib/api";
 import type { SupportResource } from "@/types/chat";
 
 const supportTypes = [
-  { value: "", label: "All Types" },
-  { value: "therapist", label: "Therapist" },
-  { value: "counselor", label: "Counselor" },
-  { value: "psychiatrist", label: "Psychiatrist" },
-  { value: "crisis", label: "Crisis Support" },
+  { value: "", label: "Doctors", query: "doctor" },
+  { value: "therapist", label: "Mental Health", query: "therapist" },
+  { value: "clinic", label: "Clinics", query: "clinic" },
+  { value: "hospital", label: "Hospitals", query: "hospital" },
+  { value: "pharmacy", label: "Pharmacies", query: "pharmacy" },
+  { value: "dentist", label: "Dentists", query: "dentist" },
+  { value: "orthopedic", label: "Orthopedic", query: "orthopedic doctor" },
+  { value: "specialist", label: "Specialists", query: "cardiologist" },
+  { value: "crisis", label: "Crisis Support", query: "" },
 ];
 
 function supportLabel(value: string): string {
   switch (value) {
     case "therapist":
       return "therapists";
-    case "counselor":
-      return "counselors";
-    case "psychiatrist":
-      return "psychiatrists";
+    case "clinic":
+      return "clinics";
+    case "hospital":
+      return "hospitals";
+    case "pharmacy":
+      return "pharmacies";
+    case "dentist":
+      return "dentists";
+    case "orthopedic":
+      return "orthopedic doctors";
+    case "specialist":
+      return "specialists";
     case "crisis":
       return "crisis resources";
     default:
-      return "professionals";
+      return "healthcare providers";
   }
 }
 
+function categoryQuery(value: string): string | undefined {
+  return supportTypes.find((st) => st.value === value)?.query;
+}
+
 export default function FindSupportPage() {
+  const searchParams = useSearchParams();
   const [location, setLocation] = useState("");
-  const [supportType, setSupportType] = useState("");
+  const [supportType, setSupportType] = useState(
+    searchParams.get("support_type") || ""
+  );
+  const [query, setQuery] = useState("");
   const [resources, setResources] = useState<SupportResource[]>([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -57,7 +78,13 @@ export default function FindSupportPage() {
     }
     setLoading(true);
     try {
-      const res = await searchSupport(location, supportType || undefined);
+      const effectiveQuery =
+        query.trim() || categoryQuery(supportType) || undefined;
+      const res = await searchSupport(
+        location,
+        supportType || undefined,
+        effectiveQuery
+      );
       setResources(res.resources);
       setMessage(res.message);
       setSearched(true);
@@ -76,10 +103,11 @@ export default function FindSupportPage() {
     <div className="max-w-4xl mx-auto space-y-8">
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">
-          Find Professional Support
+          Find Healthcare Near You
         </h1>
         <p className="text-gray-400">
-          Search for mental health professionals and resources near you.
+          Search for doctors, clinics, hospitals, pharmacies, and care
+          professionals near you.
         </p>
       </motion.div>
 
@@ -108,7 +136,7 @@ export default function FindSupportPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                Support Type
+                Category
               </label>
               <select
                 value={supportType}
@@ -123,6 +151,21 @@ export default function FindSupportPage() {
               </select>
             </div>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              What are you looking for?
+            </label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="e.g. orthopedic doctor, dentist, physiotherapist"
+                className="w-full pl-10 pr-4 py-3 rounded-xl bg-surface-2 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors text-sm"
+              />
+            </div>
+          </div>
           <button
             type="submit"
             disabled={loading}
@@ -131,12 +174,12 @@ export default function FindSupportPage() {
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Searching for {supportLabel(supportType)} near {location}...
+                Searching near {location}...
               </>
             ) : (
               <>
                 <Search className="w-4 h-4" />
-                Find Support
+                Find Healthcare
               </>
             )}
           </button>

@@ -1,6 +1,7 @@
 from langchain_core.tools import tool
 from app.core.config import settings
 from app.core.llm import get_chat_model, has_chat_model
+from app.core.support_search import search_nearby_places, detect_country
 
 @tool
 def ask_mental_health_specialist(query: str) -> str:
@@ -41,6 +42,47 @@ def ask_mental_health_specialist(query: str) -> str:
         )
 
 @tool
+def search_nearby_places_tool(query: str, location: str) -> str:
+    """Search for any healthcare or wellness professional, clinic, hospital,
+    pharmacy, or public place near a given location.
+
+    Use this for ANY request asking to find or locate something nearby:
+    doctors (e.g. orthopedic, dentist, cardiologist, rheumatologist),
+    hospitals, clinics, pharmacies, therapists, counselors, psychiatrists,
+    diagnostic labs, etc.
+
+    Args:
+        query: What the user wants to find (e.g. "orthopedic doctor", "dentist", "hospital").
+        location: The city, area, or region to search in (e.g. "Alipurduar, West Bengal, India").
+    """
+    loc = (location or "").strip()
+    if not loc:
+        return "Could you share your city or area so I can search for nearby providers?"
+
+    result = search_nearby_places(query or "", loc)
+    resources = result.get("resources", [])
+
+    if not resources:
+        return (
+            f"I couldn't retrieve live {result.get('query', 'provider')} results near {loc} right now. "
+            "Please try again in a moment, or try a more specific location. "
+            "If you need urgent help, call your local emergency number."
+        )
+
+    lines = [f"Here are {result['query']}s near {loc}:"]
+    for r in resources[:6]:
+        row = r.name
+        if r.address:
+            row += f" — {r.address}"
+        if getattr(r, "rating", None):
+            row += f" (rated {r.rating:.1f})"
+        if r.phone:
+            row += f" · {r.phone}"
+        lines.append(row)
+    lines.append("Use the map links for directions. Only verified results are shown.")
+    return "\n".join(lines)
+
+@tool
 def locate_therapist_tool(location: str) -> str:
     """Provide guidance for finding licensed mental-health professionals.
     Use when the user asks for therapists, counselors, psychologists, or
@@ -48,6 +90,21 @@ def locate_therapist_tool(location: str) -> str:
     loc = location.strip() if location else ""
     if not loc:
         return "Could you share your city or area so I can help you find relevant resources?"
+
+    result = search_nearby_places("therapist", loc)
+    resources = result.get("resources", [])
+
+    if resources:
+        lines = [f"Here are mental-health providers near {loc}:"]
+        for r in resources[:5]:
+            row = r.name
+            if r.address:
+                row += f" — {r.address}"
+            if r.phone:
+                row += f" · {r.phone}"
+            lines.append(row)
+        lines.append("Use the map links for directions. Only verified results are shown.")
+        return "\n".join(lines)
 
     if settings.IPGEOLOCATION_API_KEY:
         try:
@@ -124,23 +181,12 @@ def emergency_call_tool() -> str:
     try:
         from twilio.rest import Client as TwilioClient
         client = TwilioClient(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
-        if settings.EMERGENCY_CALL_MESSAGE:
-            client.calls.create(
-                twiml=(
-                    "<Response><Say voice=\"alice\">"
-                    f"{settings.EMERGENCY_CALL_MESSAGE}"
-                    "</Say></Response>"
-                ),
-                from_=settings.TWILIO_FROM_NUMBER,
-                to=settings.EMERGENCY_CONTACT,
-            )
-        else:
-            client.messages.create(
-                body="SafeSpace AI emergency alert. A user has triggered the crisis support workflow and may need your support.",
-                from_=settings.TWILIO_FROM_NUMBER,
-                to=settings.EMERGENCY_CONTACT,
-            )
-        return "Your emergency contact has been notified."
+        client.calls.create(
+            url=settings.TWIML_URL,
+            from_=settings.TWILIO_FROM_NUMBER,
+            to=settings.EMERGENCY_CONTACT,
+        )
+        return "A voice call was placed to your emergency contact."
     except Exception:
         return (
             "Unable to send the emergency notification. If you are in danger, "

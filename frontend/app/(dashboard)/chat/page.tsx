@@ -17,6 +17,11 @@ import {
   Loader2,
   MessageCircle,
   PhoneCall,
+  MapPin,
+  Phone,
+  ExternalLink,
+  Navigation,
+  Star,
 } from "lucide-react";
 import {
   streamChat,
@@ -29,6 +34,7 @@ import type {
   ConversationSummary,
   Message as ChatMessage,
   RiskLevel,
+  SupportResource,
 } from "@/types/chat";
 
 function agentLabel(agent?: string): string {
@@ -38,6 +44,8 @@ function agentLabel(agent?: string): string {
       return "Therapist Resource Tool";
     case "crisis_agent":
       return "Crisis Safety Agent";
+    case "location_search":
+      return "Location Search";
     default:
       return "Support Agent";
   }
@@ -56,6 +64,83 @@ function riskColor(level?: RiskLevel): string {
     default:
       return "bg-gray-500/10 text-gray-400 border-gray-500/20";
   }
+}
+
+function ResourceCards({
+  resources,
+}: {
+  resources: SupportResource[];
+}) {
+  return (
+    <div className="mt-3 grid sm:grid-cols-2 gap-3">
+      {resources.slice(0, 6).map((r, i) => (
+        <motion.div
+          key={r.name + i}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: i * 0.04 }}
+          className="p-3.5 rounded-xl bg-surface-1 border border-white/5"
+        >
+          <div className="flex items-start justify-between gap-2 mb-1.5">
+            <h4 className="text-xs font-semibold text-white">
+              {r.name}
+            </h4>
+            <span className="px-1.5 py-0.5 rounded bg-accent-blue/10 text-accent-blue text-[9px] font-medium border border-accent-blue/20 shrink-0">
+              {r.type}
+            </span>
+          </div>
+          <p className="text-[11px] text-gray-500 mb-1.5 line-clamp-2">
+            {r.description}
+          </p>
+          {r.address && (
+            <p className="flex items-start gap-1 text-[11px] text-gray-500 mb-1.5">
+              <MapPin className="w-3 h-3 shrink-0 mt-0.5" />
+              <span className="line-clamp-1">{r.address}</span>
+            </p>
+          )}
+          {typeof r.rating === "number" && (
+            <p className="flex items-center gap-1 text-[11px] text-amber-400 mb-1.5">
+              <Star className="w-3 h-3 fill-current" />
+              {r.rating.toFixed(1)}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-1.5">
+            {r.phone && (
+              <a
+                href={`tel:${r.phone}`}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-surface-3 text-[10px] text-gray-300 hover:bg-surface-4 transition-colors"
+              >
+                <Phone className="w-2.5 h-2.5" />
+                {r.phone}
+              </a>
+            )}
+            {r.url && (
+              <a
+                href={r.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-surface-3 text-[10px] text-gray-300 hover:bg-surface-4 transition-colors"
+              >
+                <ExternalLink className="w-2.5 h-2.5" />
+                Website
+              </a>
+            )}
+            {r.maps_url && (
+              <a
+                href={r.maps_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-surface-3 text-[10px] text-gray-300 hover:bg-surface-4 transition-colors"
+              >
+                <Navigation className="w-2.5 h-2.5" />
+                Maps
+              </a>
+            )}
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  );
 }
 
 function TypingIndicator() {
@@ -177,6 +262,10 @@ function MessageBubble({
               )}
             </AnimatePresence>
           </div>
+        )}
+
+        {Array.isArray(message.resources) && message.resources.length > 0 && (
+          <ResourceCards resources={message.resources} />
         )}
 
         {!isUser && message.agent_used === "crisis_agent" && (
@@ -401,6 +490,7 @@ export default function ChatPage() {
       let aiContent = "";
       let metadataAgent = "";
       let metadataRisk = "";
+      let metadataResources: SupportResource[] | undefined;
       let finalConvoId = activeConvoId;
 
       try {
@@ -431,6 +521,9 @@ export default function ChatPage() {
           (meta) => {
             metadataAgent = meta.agent_used;
             metadataRisk = meta.risk_level;
+            if (meta.resources && meta.resources.length) {
+              metadataResources = meta.resources;
+            }
           },
           (convoId) => {
             finalConvoId = convoId;
@@ -448,6 +541,7 @@ export default function ChatPage() {
                 id: crypto.randomUUID(),
                 agent_used: metadataAgent,
                 risk_level: metadataRisk as RiskLevel,
+                resources: metadataResources,
               };
             }
             return updated;

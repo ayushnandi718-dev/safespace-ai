@@ -2,6 +2,308 @@ import httpx
 from app.core.config import settings
 from app.schemas.support import SupportResource
 
+SPECIALTY_QUERIES = {
+    "orthopedic": "orthopedic doctor",
+    "orthopaedic": "orthopedic doctor",
+    "ortho": "orthopedic doctor",
+    "arthropathic": "orthopedic doctor",
+    "bone": "orthopedic doctor",
+    "dentist": "dentist",
+    "dental": "dentist",
+    "cardio": "cardiologist",
+    "cardiologist": "cardiologist",
+    "heart": "cardiologist",
+    "dermato": "dermatologist",
+    "skin": "dermatologist",
+    "neuro": "neurologist",
+    "brain": "neurologist",
+    "psychiat": "psychiatrist",
+    "rheumat": "rheumatologist",
+    "joint": "rheumatologist",
+    "gynecolog": "gynecologist",
+    "obstetric": "obstetrician",
+    "pediatric": "pediatrician",
+    "child": "pediatrician",
+    "eye": "ophthalmologist",
+    "vision": "ophthalmologist",
+    "ent": "ent doctor",
+    "ear": "ent doctor",
+    "gastro": "gastroenterologist",
+    "urolog": "urologist",
+    "pulmon": "pulmonologist",
+    "liver": "hepatologist",
+    "kidney": "nephrologist",
+    "diabet": "endocrinologist",
+    "thyroid": "endocrinologist",
+    "oncolog": "oncologist",
+    "general physician": "general physician",
+    "gp": "general physician",
+    "physician": "physician",
+    "surgeon": "surgeon",
+    "physiotherap": "physiotherapist",
+    "physio": "physiotherapist",
+    "nurse": "nurse",
+    "therapist": "therapist",
+    "counselor": "counselor",
+    "psychologist": "psychologist",
+    "psychiatrist": "psychiatrist",
+    "pharmacy": "pharmacy",
+    "pharmac": "pharmacist",
+    "chemist": "pharmacy",
+    "medical store": "pharmacy",
+    "diagnostic": "diagnostic center",
+    "laboratory": "diagnostic center",
+    "lab": "diagnostic center",
+    "hospital": "hospital",
+    "clinic": "clinic",
+    "nursing home": "nursing home",
+    "ambulance": "ambulance",
+    "blood bank": "blood bank",
+}
+
+_SPECIALTY_KEYS = sorted(SPECIALTY_QUERIES.keys(), key=len, reverse=True)
+
+def normalize_search_query(query: str) -> str:
+    text = (query or "").strip().lower()
+    if not text:
+        return "doctor"
+    for key in _SPECIALTY_KEYS:
+        if key in text:
+            return SPECIALTY_QUERIES[key]
+    if "doctor" in text or "doc" in text:
+        return "doctor"
+    if "find" in text or "near" in text or "search" in text or "locate" in text:
+        return "doctor"
+    return text
+
+def _geocode(location: str) -> tuple[float, float] | None:
+    try:
+        resp = httpx.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": location, "format": "json", "limit": 1},
+            headers={"User-Agent": "SafeSpaceAI/1.0 (safespace-ai@users.noreply.github.com)"},
+            timeout=15,
+        )
+        data = resp.json()
+        if not data:
+            return None
+        return float(data[0]["lat"]), float(data[0]["lon"])
+    except Exception:
+        return None
+
+_HEALTHCARE_PATTERN = "|".join([
+    "hospital", "clinic", "doctors", "pharmacy",
+    "dentist", "physiotherapist", "nursing_home",
+])
+
+def _overpass_search(query: str, lat: float, lon: float, limit: int = 8) -> list[dict]:
+    q = normalize_search_query(query)
+    terms: list[str] = ['node["healthcare"]']
+    if any(t in q for t in ["doctor", "physician", "surgeon", "specialist", "ortho", "cardi", "neuro", "psychiat", "rheumat"]):
+        terms.append('node["amenity"~"hospital|clinic|doctors|pharmacy"]')
+    if "dentist" in q or "dental" in q:
+        terms.append('node["amenity"="dentist"]')
+    if "pharma" in q or "chemist" in q or "medical store" in q:
+        terms.append('node["amenity"="pharmacy"]')
+    if "physio" in q:
+        terms.append('node["amenity"="physiotherapist"]')
+    if "hospital" in q or "nursing" in q:
+        terms.append('node["amenity"~"hospital|clinic"]')
+    if "diagnostic" in q or "lab" in q:
+        terms.append('node["amenity"="laboratory"]')
+    radius = 20000
+    terms.extend(_specialty_terms(q))
+    union = "\n".join(t + f"(around:{radius},{lat},{lon});" for t in terms)
+    data = (
+        "[out:json][timeout:20];\n("
+        f"{union}\n);\nout body {limit};"
+    )
+    headers = {"User-Agent": "SafeSpaceAI/1.0 (safespace-ai@users.noreply.github.com)"}
+    endpoints = (
+        "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+    )
+    try:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        def probe(endpoint: str):
+            try:
+                resp = httpx.post(endpoint, data={"data": data}, headers=headers, timeout=20)
+                if resp.status_code != 200:
+                    return None
+                return resp.json().get("elements", [])
+            except Exception:
+                return None
+        ex = ThreadPoolExecutor(max_workers=len(endpoints))
+        items = None
+        try:
+            futures = [ex.submit(probe, ep) for ep in endpoints]
+            for fut in as_completed(futures, timeout=12):
+                partial = fut.result()
+                if partial:
+                    items = partial
+                    break
+        except Exception:
+            items = None
+        finally:
+            ex.shutdown(wait=False, cancel_futures=True)
+        if not items:
+            return []
+        results = []
+        for el in items:
+            tags = el.get("tags", {}) or {}
+            name = (tags.get("name") or "").strip()
+            if not name:
+                continue
+            latv = el.get("lat") or (el.get("center") or {}).get("lat")
+            lonv = el.get("lon") or (el.get("center") or {}).get("lon")
+            category = tags.get("healthcare") or tags.get("amenity") or "clinic"
+            address = (tags.get("addr:full") or tags.get("addr:street") or "").strip()
+            if tags.get("addr:housenumber") and tags.get("addr:street"):
+                address = f"{tags.get('addr:housenumber')} {tags.get('addr:street')}".strip()
+            phone = _pick_phone(tags)
+            maps_url = f"https://www.google.com/maps/search/?api=1&query={name} near {latv},{lonv}" if (latv and lonv) else None
+            results.append(SupportResource(
+                name=name,
+                description=address or f"{category.title()} services in this area.",
+                phone=phone,
+                type=category,
+                address=address or None,
+                maps_url=maps_url,
+                url=tags.get("website") or None,
+                source="openstreetmap",
+            ))
+        return results
+    except Exception:
+        return []
+
+def _specialty_terms(q: str) -> list[str]:
+    specs = []
+    if any(k in q for k in ("ortho", "bone", "joint")):
+        specs.append("orthopedics")
+    if "cardi" in q:
+        specs.append("cardiology")
+    if "neuro" in q:
+        specs.append("neurology")
+    if "psych" in q:
+        specs.extend(["psychiatry", "psychotherapy", "psychology"])
+    if "dermat" in q:
+        specs.append("dermatology")
+    if "rheumat" in q:
+        specs.append("rheumatology")
+    if "gyn" in q or "obstetr" in q:
+        specs.append("gynecology")
+    if "pediat" in q:
+        specs.append("pediatrics")
+    if "ophthalm" in q or "eye" in q:
+        specs.append("ophthalmology")
+    if "gastro" in q:
+        specs.append("gastroenterology")
+    if "endocrine" in q:
+        specs.append("endocrinology")
+    if "urolog" in q:
+        specs.append("urology")
+    if "ent" in q or "ear, nose" in q:
+        specs.append("otolaryngology")
+    if "physio" in q:
+        specs.append("physiotherapy")
+    if "dentist" in q or "dental" in q:
+        specs.append("dentistry")
+    return [f'node["healthcare:speciality"~"{s}",i]' for s in specs]
+
+def _pick_phone(tags: dict) -> str | None:
+    for key in ("contact:mobile", "contact:phone", "phone", "contact:landline"):
+        v = (tags.get(key) or "").strip()
+        if v:
+            return v
+    return None
+
+def _google_places_search(query: str, location: str) -> list[SupportResource]:
+    if not settings.GOOGLE_MAPS_API_KEY:
+        return []
+    try:
+        resp = httpx.get(
+            "https://maps.googleapis.com/maps/api/place/textsearch/json",
+            params={"query": f"{query} in {location}", "key": settings.GOOGLE_MAPS_API_KEY},
+            timeout=15,
+        )
+        data = resp.json()
+        if data.get("status") != "OK":
+            return []
+        results = []
+        for item in data.get("results", [])[:8]:
+            name = (item.get("name") or "").strip()
+            if not name:
+                continue
+            place_id = item.get("place_id")
+            phone = ""
+            website = ""
+            if place_id:
+                details = httpx.get(
+                    "https://maps.googleapis.com/maps/api/place/details/json",
+                    params={"place_id": place_id, "fields": "formatted_phone_number,website,url", "key": settings.GOOGLE_MAPS_API_KEY},
+                    timeout=10,
+                ).json()
+                dres = details.get("result") or {}
+                phone = dres.get("formatted_phone_number") or ""
+                website = dres.get("website") or ""
+            results.append(SupportResource(
+                name=name,
+                description=(item.get("formatted_address") or "").strip() or f"Near {location}.",
+                phone=phone or None,
+                type="local",
+                address=(item.get("formatted_address") or "").strip() or None,
+                rating=item.get("rating"),
+                url=website or None,
+                maps_url=f"https://www.google.com/maps/search/{item.get('formatted_address', '')}",
+                source="google",
+            ))
+        return results
+    except Exception:
+        return []
+
+_SEARCH_CACHE: dict[tuple[str, str], dict] = {}
+
+def search_nearby_places(query: str, location: str) -> dict:
+    normalized = normalize_search_query(query)
+    cache_key = (normalized, location.lower().strip())
+    if cache_key in _SEARCH_CACHE:
+        return _SEARCH_CACHE[cache_key]
+    if settings.GOOGLE_MAPS_API_KEY:
+        google = _google_places_search(normalized, location)
+        if google:
+            return {
+                "resources": google,
+                "message": f"Showing {normalized}s near {location}.",
+                "source": "google",
+                "query": normalized,
+            }
+    coords = _geocode(location)
+    if coords:
+        overpass = _overpass_search(normalized, coords[0], coords[1])
+        if overpass:
+            result = {
+                "resources": overpass,
+                "message": f"Showing {normalized}s near {location}.",
+                "source": "openstreetmap",
+                "query": normalized,
+            }
+            if len(_SEARCH_CACHE) < 50:
+                _SEARCH_CACHE[cache_key] = result
+            return result
+    result = {
+        "resources": [],
+        "message": (
+            f"I couldn't retrieve live {normalized}s near {location} right now. "
+            "Please try again in a moment, or refine your location."
+        ),
+        "source": "unavailable",
+        "query": normalized,
+    }
+    if len(_SEARCH_CACHE) < 50:
+        _SEARCH_CACHE[cache_key] = result
+    return result
+
 SUPPORT_QUERIES = {
     "therapist": "therapist mental health clinic",
     "counselor": "mental health counselor",

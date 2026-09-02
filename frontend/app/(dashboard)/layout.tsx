@@ -22,7 +22,7 @@ import ApiKeyBanner from "@/components/ApiKeyBanner";
 const navItems = [
   { href: "/chat", label: "New Conversation", icon: MessageCircle },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/find-support", label: "Find Support", icon: Search },
+  { href: "/find-support", label: "Find Healthcare", icon: Search },
   { href: "/resources", label: "Resources", icon: BookOpen },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

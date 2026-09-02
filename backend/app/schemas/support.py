@@ -4,6 +4,7 @@ from typing import Optional, List
 class SupportSearchRequest(BaseModel):
     location: str
     support_type: Optional[str] = "therapist"
+    query: Optional[str] = None
 
 class SupportResource(BaseModel):
     name: str
@@ -21,5 +22,6 @@ class SupportSearchResponse(BaseModel):
     message: str
     location: Optional[str] = None
     support_type: Optional[str] = None
+    query: Optional[str] = None
     source: Optional[str] = None
     country: Optional[str] = None

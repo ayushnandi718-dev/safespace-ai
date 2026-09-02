@@ -90,6 +90,7 @@ export interface MoodStats {
 export interface SupportSearchParams {
   location: string;
   support_type?: string;
+  query?: string;
 }
 
 export interface IntegrationStatus {

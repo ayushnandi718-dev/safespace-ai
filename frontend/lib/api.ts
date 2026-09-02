@@ -1,4 +1,4 @@
-import type { AuthResponse, ChatResponse, Conversation, ConversationSummary, Settings, SupportSearchResponse, MoodEntry, MoodStats, IntegrationsStatusResponse } from "@/types/chat";
+import type { AuthResponse, ChatResponse, Conversation, ConversationSummary, Settings, SupportSearchResponse, SupportResource, MoodEntry, MoodStats, IntegrationsStatusResponse } from "@/types/chat";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const TOKEN_KEY = "safespace_token";
@@ -109,11 +109,17 @@ export async function sendChat(
   });
 }
 
+export interface StreamMetadata {
+  agent_used: string;
+  risk_level: string;
+  resources?: SupportResource[];
+}
+
 export async function streamChat(
   message: string,
   conversationId: string | undefined,
   onToken: (token: string) => void,
-  onMetadata: (data: { agent_used: string; risk_level: string }) => void,
+  onMetadata: (data: StreamMetadata) => void,
   onDone: (conversationId: string) => void
 ): Promise<void> {
   const token = getToken();
@@ -179,6 +185,7 @@ export async function streamChat(
               onMetadata({
                 agent_used: parsed.agent_used,
                 risk_level: parsed.risk_level,
+                resources: parsed.resources as SupportResource[] | undefined,
               });
               break;
             case "done":
@@ -211,13 +218,15 @@ export async function deleteConversation(id: string): Promise<void> {
 
 export async function searchSupport(
   location: string,
-  supportType?: string
+  supportType?: string,
+  query?: string
 ): Promise<SupportSearchResponse> {
   return apiFetch<SupportSearchResponse>("/api/v1/support/search", {
     method: "POST",
     body: JSON.stringify({
       location,
       support_type: supportType || undefined,
+      query: query?.trim() || undefined,
     }),
   });
 }
