@@ -21,3 +21,4 @@ services:
         value: "true"
       - key: CONFIRM_REAL_CALL
         value: "false"
+# Durable storage: service now points at persistent Render Postgres (safespace-pg).
