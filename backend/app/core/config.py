@@ -28,6 +28,7 @@ class Settings(BaseSettings):
         "Hello. This is SafeSpace AI. An emergency contact notification has been requested. "
         "Please contact the user as soon as possible and check on their safety."
     )
+    TWIML_URL: str = "https://safespace-ai-api.onrender.com/api/v1/crisis/twiml"
     CONFIRM_REAL_CALL: bool = False
     CORS_ORIGINS: str = '["http://localhost:3000"]'
     RATE_LIMIT_ENABLED: bool = True

@@ -1,5 +1,6 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
@@ -64,13 +65,8 @@ def _twilio_send_alert():
     except Exception as exc:
         sms_error = f"{type(exc).__name__}"
         try:
-            twiml = (
-                "<Response><Say voice=\"alice\">"
-                f"{settings.EMERGENCY_CALL_MESSAGE}"
-                "</Say></Response>"
-            )
             call = client.calls.create(
-                twiml=twiml,
+                url=settings.TWIML_URL,
                 from_=settings.TWILIO_FROM_NUMBER,
                 to=settings.EMERGENCY_CONTACT,
             )
@@ -89,19 +85,23 @@ def _twilio_call_contact():
     if client is None:
         return False, "Twilio is not configured or not available. No call was placed."
     try:
-        twiml = (
-            "<Response><Say voice=\"alice\">"
-            f"{settings.EMERGENCY_CALL_MESSAGE}"
-            "</Say></Response>"
-        )
         call = client.calls.create(
-            twiml=twiml,
+            url=settings.TWIML_URL,
             from_=settings.TWILIO_FROM_NUMBER,
             to=settings.EMERGENCY_CONTACT,
         )
         return True, f"Voice call placed to your emergency contact (SID {call.sid})."
     except Exception as exc:
         return False, f"Unable to place the call: {type(exc).__name__}."
+
+@router.get("/twiml", response_class=PlainTextResponse, include_in_schema=False)
+async def crisis_twiml():
+    message = settings.EMERGENCY_CALL_MESSAGE
+    return (
+        "<Response><Say voice=\"alice\">"
+        f"{message}"
+        "</Say></Response>"
+    )
 
 @router.post("/escalate", response_model=CrisisActionResponse)
 @limiter.limit("5/minute")
@@ -165,6 +165,32 @@ async def escalate_crisis(
             escalation_id=str(escalation.id),
         )
 
+    if simulation:
+        message = (
+            "Emergency contact notification was simulated. "
+            "No real message was sent. Please contact your local emergency services if you are in immediate danger."
+        )
+        escalation = CrisisEscalation(
+            user_id=current_user.id,
+            conversation_id=data.conversation_id,
+            risk_level=data.risk_level,
+            action_requested=action_name,
+            action_completed="simulated",
+            status="simulation",
+            details=message,
+        )
+        db.add(escalation)
+        await db.commit()
+        await db.refresh(escalation)
+        return CrisisActionResponse(
+            status="simulation",
+            message=message,
+            action=action_name,
+            risk_level=data.risk_level,
+            simulation=True,
+            escalation_id=str(escalation.id),
+        )
+
     sent, alert_message = _twilio_send_alert()
 
     action_completed = "sent" if sent else "failed"
@@ -173,29 +199,19 @@ async def escalate_crisis(
         conversation_id=data.conversation_id,
         risk_level=data.risk_level,
         action_requested=action_name,
-        action_completed="simulated" if simulation else action_completed,
-        status="simulation" if simulation else action_completed,
+        action_completed=action_completed,
+        status=action_completed,
         details=alert_message,
     )
     db.add(escalation)
     await db.commit()
     await db.refresh(escalation)
 
-    if simulation:
-        message = (
-            "Emergency contact notification was simulated. "
-            "No real message was sent. Please contact your local emergency services if you are in immediate danger."
-        )
-    elif sent:
-        message = alert_message
-    else:
-        message = alert_message
-
     return CrisisActionResponse(
-        status="simulation" if simulation else ("sent" if sent else "failed"),
-        message=message,
+        status="sent" if sent else "failed",
+        message=alert_message,
         action=action_name,
         risk_level=data.risk_level,
-        simulation=simulation,
+        simulation=False,
         escalation_id=str(escalation.id),
     )
