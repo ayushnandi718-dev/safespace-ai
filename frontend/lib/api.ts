@@ -1,4 +1,4 @@
-import type { AuthResponse, ChatResponse, Conversation, ConversationSummary, Settings, SupportSearchResponse, MoodEntry, MoodStats } from "@/types/chat";
+import type { AuthResponse, ChatResponse, Conversation, ConversationSummary, Settings, SupportSearchResponse, MoodEntry, MoodStats, IntegrationsStatusResponse } from "@/types/chat";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const TOKEN_KEY = "safespace_token";
@@ -281,4 +281,8 @@ export async function getMoodHistory(limit = 30): Promise<MoodEntry[]> {
 
 export async function getMoodStats(days = 14): Promise<MoodStats> {
   return apiFetch<MoodStats>(`/api/v1/mood/stats?days=${days}`);
+}
+
+export async function getIntegrationsStatus(): Promise<IntegrationsStatusResponse> {
+  return apiFetch<IntegrationsStatusResponse>("/api/v1/health/integrations");
 }

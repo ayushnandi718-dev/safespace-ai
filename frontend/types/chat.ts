@@ -88,6 +88,21 @@ export interface SupportSearchParams {
   support_type?: string;
 }
 
+export interface IntegrationStatus {
+  key: string;
+  name: string;
+  used_for: string;
+  configured: boolean;
+  valid: boolean;
+  status: "active" | "missing" | "expired" | "partial";
+}
+
+export interface IntegrationsStatusResponse {
+  status: "ok" | "degraded";
+  integrations: IntegrationStatus[];
+  problems: IntegrationStatus[];
+}
+
 export interface SupportSearchResponse {
   resources: SupportResource[];
   message: string;

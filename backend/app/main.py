@@ -7,6 +7,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import settings
 from app.core.database import engine, Base, run_migrations
 from app.core.rate_limit import limiter, rate_limit_exceeded_handler, rate_limit_enabled
+from app.core.integrations import get_integrations_status
 from app.models import user, conversation, message, mood
 from app.api import auth, chat, conversations, support, mood as mood_router, settings as settings_router
 
@@ -62,6 +63,10 @@ app.include_router(settings_router.router, prefix="/api/v1/settings", tags=["Set
 @app.get("/api/v1/health")
 async def health_check():
     return {"status": "healthy", "service": "SafeSpace AI"}
+
+@app.get("/api/v1/health/integrations")
+async def integrations_check():
+    return get_integrations_status()
 
 @app.get("/")
 async def root():

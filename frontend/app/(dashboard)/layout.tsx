@@ -17,6 +17,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import ApiKeyBanner from "@/components/ApiKeyBanner";
 
 const navItems = [
   { href: "/chat", label: "New Conversation", icon: MessageCircle },
@@ -171,7 +172,10 @@ export default function DashboardLayout({
           </div>
         </div>
 
-        <div className="p-4 md:p-6 lg:p-8">{children}</div>
+        <div className="p-4 md:p-6 lg:p-8">
+          <ApiKeyBanner />
+          {children}
+        </div>
       </div>
     </div>
   );
