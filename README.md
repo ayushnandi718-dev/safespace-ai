@@ -4,6 +4,8 @@
 
 SafeSpace AI is a full-stack, production-style application that combines a premium Next.js chat interface with a FastAPI backend and a LangGraph multi-agent orchestration system. Users chat with an empathetic AI assistant, discover local healthcare providers, track their mood over time, and receive safe, crisis-aware responses — all backed by secure authentication (JWT + bcrypt) and persistent conversation memory stored in PostgreSQL.
 
+> **Positioning:** SafeSpace AI is not just an LLM wrapper. It is a full-stack AI application that explores how deterministic safety systems, multi-agent orchestration, persistent memory, real-world search tools, and streaming infrastructure can work together in a production-style product.
+
 The assistant is powered by **NVIDIA Nemotron 3.5 Lightning 30B A3B**, with support for several LLM backends via a single configuration flip.
 
 > ⚠️ **Important:** SafeSpace AI is an experimental, informational support system. It is **not** a substitute for professional medical or mental-health care, diagnosis, or treatment, and it is **not** an emergency service. Emergency escalation is **simulated by default** and never places real external calls unless explicitly configured and confirmed by an operator.
@@ -23,6 +25,7 @@ The assistant is powered by **NVIDIA Nemotron 3.5 Lightning 30B A3B**, with supp
   - [Healthcare Search Pipeline](#healthcare-search-pipeline)
   - [Security & Middleware](#security--middleware)
   - [Frontend Internals](#frontend-internals)
+- [Known Limitations (honest production notes)](#known-limitations-honest-production-notes)
 - [Project Structure](#project-structure)
 - [Setup (Local Development)](#setup-local-development)
 - [Environment Variables](#environment-variables)
@@ -84,36 +87,61 @@ The assistant is powered by **NVIDIA Nemotron 3.5 Lightning 30B A3B**, with supp
 
 ## Architecture
 
-```text
-                         USER
-                           |
-                           v
-                    NEXT.JS FRONTEND
-                           |
-                         REST / SSE
-                           v
-                     FASTAPI BACKEND
-                           |
-              +------------+------------+
-              |                         |
-              v                         v
-         POSTGRESQL                 LANGGRAPH
-       (users/convos/             (orchestrator)
-        messages/mood)
-                                       |
-              +------------+----------+----------+------------+
-              |            |                     |            |
-              v            v                     v            v
-        Risk       Mental Health        Healthcare /     Crisis Safety
-     Assessment     Specialist          Therapist        (emergency
-     (rules)        (locate/ask)        Finder tool       tool)
-                                       |
-                                       v
-                               FINAL RESPONSE
-                                       |
-                                       v
-                                     USER
+```mermaid
+flowchart TD
+    U[User]
+
+    F[Next.js Frontend]
+
+    API[FastAPI Backend]
+
+    AUTH[JWT Auth]
+    DB[(PostgreSQL)]
+
+    RISK[Rule-Based Risk Assessment]
+
+    GRAPH[LangGraph Orchestrator]
+
+    CRISIS[Crisis Safety Workflow]
+    SUPPORT[Emotional Support Agent]
+    SEARCH[Healthcare Search Tool]
+    THERAPIST[Therapist Finder]
+
+    NVIDIA[NVIDIA Nemotron]
+    GROQ[Groq Fallback]
+
+    OSM[OpenStreetMap / Overpass / Photon]
+    GOOGLE[Google Places Optional]
+
+    U --> F
+
+    F -->|REST / SSE| API
+
+    API --> AUTH
+    API --> DB
+
+    API --> RISK
+
+    RISK -->|HIGH / IMMEDIATE| CRISIS
+    RISK -->|LOW / MODERATE| GRAPH
+
+    GRAPH --> SUPPORT
+    GRAPH --> SEARCH
+    GRAPH --> THERAPIST
+
+    SUPPORT --> NVIDIA
+    SUPPORT -.Fallback.-> GROQ
+
+    SEARCH --> OSM
+    SEARCH -.Optional.-> GOOGLE
+
+    THERAPIST --> OSM
+
+    SUPPORT --> DB
+    CRISIS --> DB
 ```
+
+> The request pipeline is **safety-first**: a deterministic risk-assessment gate runs before any conversational generation, so `HIGH`/`IMMEDIATE` messages are routed into a dedicated crisis workflow instead of a normal coaching prompt.
 
 ### User Flow
 
@@ -253,6 +281,21 @@ Applied in order in the FastAPI app:
 - **Chat:** `streamChat` consumes an SSE stream and dispatches `token`/`metadata`/`done` events.
 - **Route protection:** the `(dashboard)` layout performs a client-side redirect to `/login` (no middleware).
 - **Design tokens** (`tailwind.config.ts`): `surface-0: #080A12`, accents blue `#60a5fa` / violet `#a78bfa` / teal `#2dd4bf`, plus custom utilities (`gradient-text`, `glass`, `hover-lift`) and animations (`typing-dot`, `orbit`, `fade-in`).
+
+---
+
+## Known Limitations (honest production notes)
+
+This is a student/portfolio project that aims for **production-style** engineering without yet being a hardened clinical product. The most important gaps, stated openly:
+
+- **Auth tokens live in `localStorage`** (key `safespace_token`) and are sent as `Authorization: Bearer`. Evolution: HttpOnly + Secure + SameSite cookies with short-lived access tokens and refresh-token rotation to reduce XSS token-exfiltration risk.
+- **Risk detection is regex/rule-based only.** Deterministic rules are fast and always available, but they can miss indirect or contextual language (e.g. *"I don't think I'll be here tomorrow"*). Evolution: layered detection — rules (fast first layer) → contextual safety classifier → conversation-history analysis → final risk decision.
+- **Conversation context is bounded to the last 20 messages.** Full-history summarization (rolling summary + recent messages + key preferences) is the next step.
+- **Search depends on third-party APIs** (OpenStreetMap Overpass/Photon, optional Google Places) with public rate limits and availability variance. Results are cached; a Redis cache layer would harden this.
+- **Free-tier hosting** (Render + PostgreSQL) has cold starts and a Postgres expiry (~30 days). A paid plan is needed for persistent, always-on production use.
+- **Observability is minimal.** Structured logging (request_id / user / latency) and error monitoring (e.g. Sentry) are the biggest production-readiness gaps.
+
+None of these stop the project from being a strong demonstration of safety-first, full-stack AI engineering — this list shows the direction of travel toward production hardening.
 
 ---
 
@@ -1040,10 +1083,30 @@ if CONFIRM_REAL_CALL is False:
 
 ## Roadmap
 
+**Done**
+
 - [x] Mood tracking (check-ins, spark-lines, streaks, trend)
 - [x] Healthcare finder (OSM Overpass + Photon fallback, Google Places optional)
 - [x] Persistent PostgreSQL accounts (fixes containerized-SQLite data loss)
 - [x] Production deployment (Render backend + Vercel frontend)
+- [x] Consolidated architecture/API/deployment docs in this README
+
+**Priority 1 — security & safety hardening**
+
+- [ ] Move auth from `localStorage` to HttpOnly + Secure + SameSite cookies with refresh-token rotation
+- [ ] Add layered contextual safety classification (rules → classifier → conversation history)
+- [ ] Add structured logging (request_id, latency, status) and error monitoring (Sentry)
+- [ ] Rate-limit login attempts + breach-password checks; strengthen password policy
+
+**Priority 2 — scale & memory**
+
+- [ ] Redis caching for healthcare search / geocoding
+- [ ] Conversation summarization (rolling summary + recent messages)
+- [ ] Database indexes (`messages(conversation_id, created_at)`, `mood_entries(user_id, created_at)`, …)
+- [ ] Background jobs / workers
+
+**Priority 3 — product & platform**
+
 - [ ] Google OAuth sign-in
 - [ ] Verified provider-directory API integration for live national search
 - [ ] Voice input / output
