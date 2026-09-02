@@ -286,3 +286,29 @@ export async function getMoodStats(days = 14): Promise<MoodStats> {
 export async function getIntegrationsStatus(): Promise<IntegrationsStatusResponse> {
   return apiFetch<IntegrationsStatusResponse>("/api/v1/health/integrations");
 }
+
+export interface CrisisEscalationResponse {
+  status: string;
+  message: string;
+  action: string;
+  risk_level: string;
+  simulation: boolean;
+  escalation_id?: string;
+}
+
+export async function escalateCrisis(
+  action: "notify_contact" | "call_emergency",
+  riskLevel: string,
+  conversationId?: string,
+  confirmed = true
+): Promise<CrisisEscalationResponse> {
+  return apiFetch<CrisisEscalationResponse>("/api/v1/crisis/escalate", {
+    method: "POST",
+    body: JSON.stringify({
+      conversation_id: conversationId,
+      risk_level: riskLevel,
+      action,
+      confirmed,
+    }),
+  });
+}

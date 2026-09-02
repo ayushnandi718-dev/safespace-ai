@@ -48,6 +48,10 @@ export interface SupportResource {
   url?: string;
   phone?: string;
   type: string;
+  address?: string;
+  rating?: number;
+  maps_url?: string;
+  source?: string;
 }
 
 export interface AuthResponse {
@@ -106,4 +110,8 @@ export interface IntegrationsStatusResponse {
 export interface SupportSearchResponse {
   resources: SupportResource[];
   message: string;
+  location?: string;
+  support_type?: string;
+  source?: string;
+  country?: string;
 }

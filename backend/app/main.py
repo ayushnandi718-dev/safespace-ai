@@ -8,8 +8,8 @@ from app.core.config import settings
 from app.core.database import engine, Base, run_migrations
 from app.core.rate_limit import limiter, rate_limit_exceeded_handler, rate_limit_enabled
 from app.core.integrations import get_integrations_status
-from app.models import user, conversation, message, mood
-from app.api import auth, chat, conversations, support, mood as mood_router, settings as settings_router
+from app.models import user, conversation, message, mood, crisis
+from app.api import auth, chat, conversations, support, crisis as crisis_router, mood as mood_router, settings as settings_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -59,6 +59,7 @@ app.include_router(conversations.router, prefix="/api/v1/conversations", tags=["
 app.include_router(support.router, prefix="/api/v1/support", tags=["Support"])
 app.include_router(mood_router.router, prefix="/api/v1/mood", tags=["Mood"])
 app.include_router(settings_router.router, prefix="/api/v1/settings", tags=["Settings"])
+app.include_router(crisis_router.router, prefix="/api/v1/crisis", tags=["Crisis"])
 
 @app.get("/api/v1/health")
 async def health_check():

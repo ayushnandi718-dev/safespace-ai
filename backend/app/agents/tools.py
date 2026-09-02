@@ -1,14 +1,13 @@
 from langchain_core.tools import tool
 from app.core.config import settings
+from app.core.llm import get_chat_model, has_chat_model
 
 @tool
 def ask_mental_health_specialist(query: str) -> str:
     """Provide empathetic, non-diagnostic mental-health support and guidance.
     Use this for emotional support, stress, anxiety, coping strategies, or
     general psychological guidance."""
-    from langchain_groq import ChatGroq
-
-    if not settings.GROQ_API_KEY:
+    if not has_chat_model():
         return (
             "I understand you're going through a difficult time. While I'm experiencing "
             "a technical limitation right now, I want you to know that your feelings are "
@@ -16,7 +15,7 @@ def ask_mental_health_specialist(query: str) -> str:
             "trusted person in your life."
         )
 
-    llm = ChatGroq(model=settings.LLM_MODEL, temperature=0.7, max_tokens=600, api_key=settings.GROQ_API_KEY)
+    llm = get_chat_model(model=settings.LLM_MODEL, temperature=0.7, max_tokens=600)
 
     specialist_prompt = (
         "You are a warm, empathetic support companion (not a licensed professional). "
@@ -125,14 +124,25 @@ def emergency_call_tool() -> str:
     try:
         from twilio.rest import Client as TwilioClient
         client = TwilioClient(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
-        client.messages.create(
-            body="SafeSpace AI emergency alert. A user needs immediate support.",
-            from_=settings.TWILIO_FROM_NUMBER,
-            to=settings.EMERGENCY_CONTACT,
-        )
+        if settings.EMERGENCY_CALL_MESSAGE:
+            client.calls.create(
+                twiml=(
+                    "<Response><Say voice=\"alice\">"
+                    f"{settings.EMERGENCY_CALL_MESSAGE}"
+                    "</Say></Response>"
+                ),
+                from_=settings.TWILIO_FROM_NUMBER,
+                to=settings.EMERGENCY_CONTACT,
+            )
+        else:
+            client.messages.create(
+                body="SafeSpace AI emergency alert. A user has triggered the crisis support workflow and may need your support.",
+                from_=settings.TWILIO_FROM_NUMBER,
+                to=settings.EMERGENCY_CONTACT,
+            )
         return "Your emergency contact has been notified."
     except Exception:
         return (
             "Unable to send the emergency notification. If you are in danger, "
-            "please call local emergency services (911 in the US) right now."
+            "please call local emergency services right now."
         )

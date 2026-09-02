@@ -12,6 +12,11 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     GROQ_API_KEY: str = ""
     LLM_MODEL: str = "openai/gpt-oss-120b"
+    NVIDIA_API_KEY: str = ""
+    NVIDIA_MODEL: str = "nvidia/nemotron-3.5-lightning-30b-a3b"
+    NVIDIA_BASE_URL: str = "https://integrate.api.nvidia.com/v1"
+    NVIDIA_ENABLE_THINKING: bool = False
+    NVIDIA_REASONING_BUDGET: int = 2048
     THERAPIST_API_KEY: str = ""
     GOOGLE_MAPS_API_KEY: str = ""
     IPGEOLOCATION_API_KEY: str = ""
@@ -19,6 +24,10 @@ class Settings(BaseSettings):
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_FROM_NUMBER: str = ""
     EMERGENCY_CONTACT: str = ""
+    EMERGENCY_CALL_MESSAGE: str = (
+        "Hello. This is SafeSpace AI. An emergency contact notification has been requested. "
+        "Please contact the user as soon as possible and check on their safety."
+    )
     CONFIRM_REAL_CALL: bool = False
     CORS_ORIGINS: str = '["http://localhost:3000"]'
     RATE_LIMIT_ENABLED: bool = True

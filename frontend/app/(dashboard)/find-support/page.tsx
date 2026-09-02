@@ -9,6 +9,8 @@ import {
   ExternalLink,
   Loader2,
   Building2,
+  Star,
+  Navigation,
 } from "lucide-react";
 import { searchSupport } from "@/lib/api";
 import { useToast } from "@/components/Toast";
@@ -22,6 +24,21 @@ const supportTypes = [
   { value: "psychiatrist", label: "Psychiatrist" },
   { value: "crisis", label: "Crisis Support" },
 ];
+
+function supportLabel(value: string): string {
+  switch (value) {
+    case "therapist":
+      return "therapists";
+    case "counselor":
+      return "counselors";
+    case "psychiatrist":
+      return "psychiatrists";
+    case "crisis":
+      return "crisis resources";
+    default:
+      return "professionals";
+  }
+}
 
 export default function FindSupportPage() {
   const [location, setLocation] = useState("");
@@ -114,7 +131,7 @@ export default function FindSupportPage() {
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Searching...
+                Searching for {supportLabel(supportType)} near {location}...
               </>
             ) : (
               <>
@@ -159,13 +176,32 @@ export default function FindSupportPage() {
                     <h3 className="text-sm font-semibold text-white">
                       {resource.name}
                     </h3>
-                    <span className="px-2 py-0.5 rounded-md bg-accent-blue/10 text-accent-blue text-[10px] font-medium border border-accent-blue/20 shrink-0">
-                      {resource.type}
-                    </span>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span className="px-2 py-0.5 rounded-md bg-accent-blue/10 text-accent-blue text-[10px] font-medium border border-accent-blue/20">
+                        {resource.type}
+                      </span>
+                      {resource.source && (
+                        <span className="px-2 py-0.5 rounded-md bg-surface-3 text-[10px] text-gray-500 border border-white/5">
+                          {resource.source}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <p className="text-xs text-gray-400 mb-3 line-clamp-3">
                     {resource.description}
                   </p>
+                  {resource.address && (
+                    <p className="flex items-start gap-1.5 text-xs text-gray-500 mb-3">
+                      <MapPin className="w-3 h-3 shrink-0 mt-0.5" />
+                      <span className="line-clamp-2">{resource.address}</span>
+                    </p>
+                  )}
+                  {typeof resource.rating === "number" && (
+                    <p className="flex items-center gap-1 text-xs text-amber-400 mb-3">
+                      <Star className="w-3 h-3 fill-current" />
+                      {resource.rating.toFixed(1)}
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     {resource.phone && (
                       <a
@@ -185,6 +221,17 @@ export default function FindSupportPage() {
                       >
                         <ExternalLink className="w-3 h-3" />
                         Website
+                      </a>
+                    )}
+                    {resource.maps_url && (
+                      <a
+                        href={resource.maps_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-3 text-xs text-gray-300 hover:bg-surface-4 transition-colors"
+                      >
+                        <Navigation className="w-3 h-3" />
+                        View on Maps
                       </a>
                     )}
                   </div>

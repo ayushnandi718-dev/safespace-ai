@@ -3,9 +3,14 @@ from app.core.config import settings
 
 INTEGRATIONS = [
     {
-        "key": "GROQ_API_KEY",
-        "name": "Groq AI (chat & emotional support)",
+        "key": "NVIDIA_API_KEY",
+        "name": "NVIDIA Nemotron (chat & emotional support)",
         "used_for": "Powering SafeSpace's empathetic support-agent responses.",
+    },
+    {
+        "key": "GROQ_API_KEY",
+        "name": "Groq AI (fallback chat model)",
+        "used_for": "Fallback provider if NVIDIA/Nemotron is unavailable.",
     },
     {
         "key": "IPGEOLOCATION_API_KEY",
@@ -19,10 +24,10 @@ INTEGRATIONS = [
     },
 ]
 
-def _is_groq_key_valid(api_key: str) -> bool:
+def _check_bearer_endpoint(url: str, api_key: str) -> bool:
     try:
         resp = httpx.get(
-            "https://api.groq.com/openai/v1/models",
+            url,
             headers={"Authorization": f"Bearer {api_key}"},
             timeout=10,
         )
@@ -34,8 +39,28 @@ def _is_groq_key_valid(api_key: str) -> bool:
         pass
     return False
 
+def _is_groq_key_valid(api_key: str) -> bool:
+    return _check_bearer_endpoint("https://api.groq.com/openai/v1/models", api_key)
+
+def _is_nvidia_key_valid(api_key: str) -> bool:
+    return _check_bearer_endpoint("https://integrate.api.nvidia.com/v1/models", api_key)
+
 def get_integrations_status() -> dict:
     statuses = []
+
+    nvidia_configured = bool(settings.NVIDIA_API_KEY)
+    if nvidia_configured:
+        nvidia_valid = _is_nvidia_key_valid(settings.NVIDIA_API_KEY)
+        nvidia_status = "active" if nvidia_valid else "expired"
+    else:
+        nvidia_valid = False
+        nvidia_status = "missing"
+    statuses.append({
+        **INTEGRATIONS[0],
+        "configured": nvidia_configured,
+        "valid": nvidia_valid,
+        "status": nvidia_status,
+    })
 
     groq_configured = bool(settings.GROQ_API_KEY)
     if groq_configured:
@@ -45,7 +70,7 @@ def get_integrations_status() -> dict:
         groq_valid = False
         groq_status = "missing"
     statuses.append({
-        **INTEGRATIONS[0],
+        **INTEGRATIONS[1],
         "configured": groq_configured,
         "valid": groq_valid,
         "status": groq_status,
@@ -53,7 +78,7 @@ def get_integrations_status() -> dict:
 
     ipgeo_configured = bool(settings.IPGEOLOCATION_API_KEY)
     statuses.append({
-        **INTEGRATIONS[1],
+        **INTEGRATIONS[2],
         "configured": ipgeo_configured,
         "valid": ipgeo_configured,
         "status": "active" if ipgeo_configured else "missing",
@@ -67,7 +92,7 @@ def get_integrations_status() -> dict:
         settings.EMERGENCY_CONTACT,
     ])
     statuses.append({
-        **INTEGRATIONS[2],
+        **INTEGRATIONS[3],
         "configured": twilio_configured,
         "valid": twilio_complete,
         "status": "active" if twilio_complete else ("partial" if twilio_configured else "missing"),

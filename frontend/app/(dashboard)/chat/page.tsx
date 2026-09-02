@@ -16,12 +16,14 @@ import {
   Sparkles,
   Loader2,
   MessageCircle,
+  PhoneCall,
 } from "lucide-react";
 import {
   streamChat,
   getConversations,
   getConversation,
   deleteConversation,
+  escalateCrisis,
 } from "@/lib/api";
 import type {
   ConversationSummary,
@@ -79,7 +81,13 @@ function TypingIndicator() {
   );
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function MessageBubble({
+  message,
+  conversationId,
+}: {
+  message: ChatMessage;
+  conversationId?: string;
+}) {
   const isUser = message.role === "user";
   const [expanded, setExpanded] = useState(false);
 
@@ -170,8 +178,113 @@ function MessageBubble({ message }: { message: ChatMessage }) {
             </AnimatePresence>
           </div>
         )}
+
+        {!isUser && message.agent_used === "crisis_agent" && (
+          <CrisisActions
+            conversationId={conversationId}
+            riskLevel={message.risk_level}
+          />
+        )}
       </div>
     </motion.div>
+  );
+}
+
+function CrisisActions({
+  conversationId,
+  riskLevel,
+}: {
+  conversationId?: string;
+  riskLevel?: RiskLevel;
+}) {
+  const [step, setStep] = useState<"none" | "confirm" | "working">("none");
+  const [result, setResult] = useState<string>("");
+
+  const runAction = async (action: "notify_contact" | "call_emergency") => {
+    setStep("working");
+    setResult("");
+    try {
+      const res = await escalateCrisis(
+        action,
+        riskLevel || "HIGH",
+        conversationId
+      );
+      setResult(res.message);
+      setStep("none");
+    } catch {
+      setResult("Something went wrong. Please try again.");
+      setStep("none");
+    }
+  };
+
+  return (
+    <div className="mt-3">
+      {step === "confirm" && (
+        <div className="rounded-xl bg-surface-3/60 border border-white/10 px-3 py-3">
+          <p className="text-xs text-gray-300 font-medium mb-2">
+            Are you sure? This will notify your configured emergency contact.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => {
+                setStep("confirm");
+                runAction("notify_contact");
+              }}
+              className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-300 text-xs font-medium hover:bg-red-500/30 transition-colors"
+            >
+              Yes, notify my contact
+            </button>
+            <button
+              onClick={() => setStep("none")}
+              className="px-3 py-1.5 rounded-lg bg-surface-3 text-xs text-gray-400 hover:text-gray-200 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === "none" && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setStep("confirm")}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/15 text-red-300 text-xs border border-red-500/25 hover:bg-red-500/25 transition-colors"
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            Notify my emergency contact
+          </button>
+          <button
+            onClick={() => runAction("call_emergency")}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-3 text-xs text-gray-300 hover:bg-surface-4 transition-colors"
+          >
+            <PhoneCall className="w-3.5 h-3.5" />
+            Call emergency services
+          </button>
+          <button
+            onClick={() => runAction("notify_contact")}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-300 text-xs border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
+          >
+            I&apos;m safe for now
+          </button>
+        </div>
+      )}
+
+      {step === "working" && (
+        <button
+          disabled
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-3 text-xs text-gray-400"
+        >
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          Processing...
+        </button>
+      )}
+
+      {result && (
+        <p className="mt-2 text-xs text-gray-400 rounded-lg bg-surface-3/50 px-3 py-2 border border-white/5">
+          {result}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -520,7 +633,7 @@ export default function ChatPage() {
           ) : (
             <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
               {messages.map((msg) => (
-                <MessageBubble key={msg.id} message={msg} />
+                <MessageBubble key={msg.id} message={msg} conversationId={activeConvoId ?? undefined} />
               ))}
               {isStreaming &&
                 messages.length > 0 &&
