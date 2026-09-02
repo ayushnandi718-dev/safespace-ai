@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 import uuid
 from datetime import datetime
+from app.schemas.support import SupportResource
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
@@ -12,7 +13,7 @@ class ChatResponse(BaseModel):
     message: str
     agent_used: str
     risk_level: str
-    resources: List[str] = []
+    resources: List[SupportResource] = []
     message_id: uuid.UUID
     created_at: datetime
 

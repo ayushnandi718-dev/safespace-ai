@@ -303,6 +303,17 @@ async def run_orchestration(message: str, context: list[dict]) -> dict:
             "resources": [],
         }
 
+def _dump_resources(resources) -> list[dict]:
+    out = []
+    for r in resources or []:
+        if isinstance(r, dict):
+            out.append(r)
+        elif hasattr(r, "model_dump"):
+            out.append(r.model_dump())
+        else:
+            out.append(r)
+    return out
+
 async def stream_orchestration(message: str, context: list[dict]) -> AsyncGenerator[dict, None]:
     risk = assess_risk(message)
 
@@ -331,7 +342,7 @@ async def stream_orchestration(message: str, context: list[dict]) -> AsyncGenera
             return
         result = search_nearby_places(query, location)
         full_response = _format_search_result(result, location)
-        yield {"type": "metadata", "agent_used": "location_search", "risk_level": risk.risk_level.value, "resources": result.get("resources", [])}
+        yield {"type": "metadata", "agent_used": "location_search", "risk_level": risk.risk_level.value, "resources": _dump_resources(result.get("resources", []))}
         for i in range(0, len(full_response), 10):
             yield {"type": "token", "content": full_response[i:i+10]}
         yield {"type": "done"}
@@ -360,13 +371,13 @@ async def stream_orchestration(message: str, context: list[dict]) -> AsyncGenera
                             tool_args = tc.get("args", {}) or {}
                             if tool_name == "locate_therapist_tool":
                                 res = search_nearby_places("therapist", tool_args.get("location", ""))
-                                yield {"type": "metadata", "agent_used": "therapist", "risk_level": "LOW", "resources": res.get("resources", [])}
+                                yield {"type": "metadata", "agent_used": "therapist", "risk_level": "LOW", "resources": _dump_resources(res.get("resources", []))}
                             elif tool_name == "search_nearby_places_tool":
                                 res = search_nearby_places(
                                     tool_args.get("query", ""),
                                     tool_args.get("location", ""),
                                 )
-                                yield {"type": "metadata", "agent_used": "location_search", "risk_level": "LOW", "resources": res.get("resources", [])}
+                                yield {"type": "metadata", "agent_used": "location_search", "risk_level": "LOW", "resources": _dump_resources(res.get("resources", []))}
     except Exception:
         yield {"type": "token", "content": "I'm having a technical issue. Please try again."}
 
