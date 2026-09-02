@@ -9,15 +9,13 @@ from app.core.database import engine, Base, run_migrations
 from app.core.rate_limit import limiter, rate_limit_exceeded_handler, rate_limit_enabled
 from app.core.integrations import get_integrations_status
 from app.models import user, conversation, message, mood, crisis
-from app.api import auth, chat, conversations, support, crisis as crisis_router, mood as mood_router, settings as settings_router
+from app.api import chat, conversations, support, crisis as crisis_router, mood as mood_router, settings as settings_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await run_migrations()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    if settings.JWT_SECRET_KEY in ("change-me-in-production", "change-me-in-production-use-a-real-secret"):
-        print("WARNING: JWT_SECRET_KEY is set to a default value. Set a long random secret before deploying.")
     yield
 
 app = FastAPI(
@@ -53,7 +51,6 @@ if rate_limit_enabled():
     app.add_middleware(SlowAPIMiddleware)
     app.add_exception_handler(429, rate_limit_exceeded_handler)
 
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(chat.router, prefix="/api/v1/chat", tags=["Chat"])
 app.include_router(conversations.router, prefix="/api/v1/conversations", tags=["Conversations"])
 app.include_router(support.router, prefix="/api/v1/support", tags=["Support"])

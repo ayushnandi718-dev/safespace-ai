@@ -1,20 +1,6 @@
-import type { AuthResponse, ChatResponse, Conversation, ConversationSummary, Settings, SupportSearchResponse, SupportResource, MoodEntry, MoodStats, IntegrationsStatusResponse } from "@/types/chat";
+import type { ChatResponse, Conversation, ConversationSummary, Settings, SupportSearchResponse, SupportResource, MoodEntry, MoodStats, IntegrationsStatusResponse } from "@/types/chat";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const TOKEN_KEY = "safespace_token";
-
-export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token);
-}
-
-export function clearToken(): void {
-  localStorage.removeItem(TOKEN_KEY);
-}
 
 export class ApiError extends Error {
   status: number;
@@ -29,14 +15,9 @@ async function apiFetch<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = getToken();
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string>),
   };
-
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
 
   if (
     options.body &&
@@ -69,33 +50,6 @@ async function apiFetch<T>(
   return res.json();
 }
 
-export async function register(
-  name: string,
-  email: string,
-  password: string
-): Promise<AuthResponse> {
-  return apiFetch<AuthResponse>("/api/v1/auth/register", {
-    method: "POST",
-    body: JSON.stringify({ name, email, password }),
-  });
-}
-
-export async function login(
-  email: string,
-  password: string
-): Promise<AuthResponse> {
-  return apiFetch<AuthResponse>("/api/v1/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
-}
-
-export async function getMe() {
-  return apiFetch<{ id: number; name: string; email: string }>(
-    "/api/v1/auth/me"
-  );
-}
-
 export async function sendChat(
   message: string,
   conversationId?: string
@@ -122,13 +76,9 @@ export async function streamChat(
   onMetadata: (data: StreamMetadata) => void,
   onDone: (conversationId: string) => void
 ): Promise<void> {
-  const token = getToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
 
   const res = await fetch(`${BASE_URL}/api/v1/chat/stream`, {
     method: "POST",
@@ -252,27 +202,8 @@ export async function updateSettings(
   });
 }
 
-export async function changePassword(
-  currentPassword: string,
-  newPassword: string
-): Promise<void> {
-  return apiFetch<void>("/api/v1/settings/change-password", {
-    method: "POST",
-    body: JSON.stringify({
-      current_password: currentPassword,
-      new_password: newPassword,
-    }),
-  });
-}
-
 export async function deleteAllConversations(): Promise<void> {
   return apiFetch<void>("/api/v1/settings/conversations", {
-    method: "DELETE",
-  });
-}
-
-export async function deleteAccount(): Promise<void> {
-  return apiFetch<void>("/api/v1/settings/account", {
     method: "DELETE",
   });
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -11,7 +11,6 @@ import {
   Search,
   BookOpen,
   Settings,
-  LogOut,
   Menu,
   X,
   ChevronRight,
@@ -36,35 +35,13 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, loading, logout } = useAuth();
+  const { user } = useAuth();
   const pathname = usePathname();
-  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push("/login");
-    }
-  }, [loading, user, router]);
 
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-surface-0">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-blue to-accent-violet flex items-center justify-center animate-pulse">
-            <Shield className="w-5 h-5 text-white" />
-          </div>
-          <div className="w-20 h-1.5 rounded-full skeleton" />
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) return null;
 
   const Sidebar = () => (
     <div className="flex flex-col h-full bg-surface-1 border-r border-white/5 w-[280px]">
@@ -143,13 +120,6 @@ export default function DashboardLayout({
           </div>
           <button className="text-gray-500 hover:text-gray-300 transition-colors">
             <MoreVertical className="w-4 h-4" />
-          </button>
-          <button
-            onClick={logout}
-            title="Sign out"
-            className="text-gray-500 hover:text-red-400 transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
           </button>
         </div>
       </div>

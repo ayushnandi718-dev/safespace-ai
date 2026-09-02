@@ -2,7 +2,7 @@
 
 **Your AI Health, Wellness & Care Companion**
 
-SafeSpace AI is a full-stack, production-style application that combines a premium Next.js chat interface with a FastAPI backend and a LangGraph multi-agent orchestration system. Users chat with an empathetic AI assistant, discover local healthcare providers, track their mood over time, and receive safe, crisis-aware responses — all backed by secure authentication (JWT + bcrypt) and persistent conversation memory stored in PostgreSQL.
+SafeSpace AI is a full-stack, production-style application that combines a premium Next.js chat interface with a FastAPI backend and a LangGraph multi-agent orchestration system. Users chat with an empathetic AI assistant, discover local healthcare providers, track their mood over time, and receive safe, crisis-aware responses — all backed by persistent conversation memory stored in PostgreSQL. No login or account is required right now; every visitor uses a single shared anonymous session (authentication is temporarily disabled).
 
 > **Positioning:** SafeSpace AI is not a chatbot wrapper. It is **"a safety-first multi-agent AI platform"** exploring deterministic risk routing, persistent memory, real-world tools, and streaming architecture — i.e. **AI systems engineering**, not just an LLM prompt. The quality of an AI product is determined not only by the model behind it, but by the systems built around it.
 
@@ -58,7 +58,7 @@ The assistant is powered by **NVIDIA Nemotron 3.5 Lightning 30B A3B**, with supp
 - **Multi-Agent AI** — LangGraph selects the correct specialist tool based on intent and safety requirements.
 - **Conversation Memory** — persistent database-backed history with a bounded context window (last 20 messages).
 - **Streaming Responses** — progressive token delivery over Server-Sent Events (SSE).
-- **Secure Authentication** — JWT + bcrypt password hashing, per-user conversation authorization.
+- **No-Login Access** — jump straight in; all data lives under a single shared anonymous session (authentication temporarily removed).
 - **Premium Dark UI** — responsive, animated, glassmorphic Next.js interface with a calm healthcare aesthetic.
 
 ---
@@ -77,7 +77,7 @@ The assistant is powered by **NVIDIA Nemotron 3.5 Lightning 30B A3B**, with supp
 
 **Database**
 - **SQLite** by default (zero-config local demo)
-- **PostgreSQL** (via `asyncpg`) in production on Render — persistent accounts
+- **PostgreSQL** (via `asyncpg`) in production on Render — persistent conversations, mood entries, and audit records
 
 **Infrastructure**
 - Backend: Render (Docker web service, free tier)
@@ -94,7 +94,6 @@ flowchart TB
 
     subgraph FRONTEND["Frontend Layer"]
         NEXT["Next.js 14<br/>React + TypeScript"]
-        AUTH_UI["Authentication UI"]
         CHAT_UI["Streaming Chat UI"]
         MOOD_UI["Mood Dashboard"]
         SEARCH_UI["Healthcare Finder"]
@@ -103,7 +102,6 @@ flowchart TB
     subgraph BACKEND["Backend Layer - FastAPI"]
         API["REST API + SSE"]
 
-        AUTH["JWT Authentication"]
         RATE["Rate Limiting"]
         SECURITY["Security Middleware"]
 
@@ -132,7 +130,6 @@ flowchart TB
 
     USER --> NEXT
 
-    NEXT --> AUTH_UI
     NEXT --> CHAT_UI
     NEXT --> MOOD_UI
     NEXT --> SEARCH_UI
@@ -141,7 +138,6 @@ flowchart TB
 
     API --> SECURITY
     API --> RATE
-    API --> AUTH
 
     API --> POSTGRES
 
@@ -175,7 +171,7 @@ flowchart TB
 ### User Flow
 
 ```text
-User visits website -> Creates account -> Dashboard
+User visits website -> Dashboard
         -> Starts conversation -> Frontend -> FastAPI
         -> Risk Assessment -> LangGraph Router -> Specialist Agent / Direct tool
         -> AI Response (streamed) -> Saved to database -> Displayed in Chat UI
@@ -186,10 +182,9 @@ User visits website -> Creates account -> Dashboard
 ```text
 Next.js (browser)
       │  POST /api/v1/chat (or /chat/stream)  with  {"message": "...", "conversation_id"?}
-      │  + Authorization: Bearer <JWT>
       ▼
 FastAPI Router (app/api/chat.py)
-      │  authenticate via get_current_user (JWT → User)
+      │  resolve shared anonymous user via get_current_user
       │  resolve or create Conversation
       │  load last 20 messages for context
       ▼
@@ -243,7 +238,7 @@ Intent classification uses `temperature=0.0`; general responses use `temperature
 SQLAlchemy async models with UUID primary keys:
 
 ```
-User (users)
+User (users)                    -- currently a single shared anonymous user
  ├─ id (uuid PK), name, email (unique), hashed_password
  ├─ theme (default "dark"), email_notifications (default true)
  ├─ created_at
@@ -301,14 +296,13 @@ Applied in order in the FastAPI app:
 2. **Security headers** (custom `SecurityHeadersMiddleware`) — `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, `Content-Security-Policy`, `X-XSS-Protection`.
 3. **SlowAPI rate limiting** — enabled via `RATE_LIMIT_ENABLED`; 429 handler with `Retry-After`.
 
-**Authentication** (`core/security.py`): bcrypt hashing; `create_access_token`/`decode_token` via `python-jose` (HS256); `get_current_user` dependency reads `sub` from the Bearer token and fetches the `User`, raising `401` on failure.
+**Identity** (`core/security.py`): authentication is temporarily disabled. `get_current_user` resolves every request to a single shared anonymous user (`guest@safespace.ai`, auto-created on first use), so all conversations, mood entries, and settings live in one shared session.
 
 ### Frontend Internals
 
 - **App Router, all pages are client components.**
-- **Auth:** JWT stored in `localStorage` (key `safespace_token`), sent as `Authorization: Bearer` by `apiFetch` in `lib/api.ts`. `AuthProvider` calls `/auth/me` on mount to restore the session.
+- **Identity:** `AuthProvider` in `lib/auth.tsx` exposes a constant guest user; no token is stored or sent.
 - **Chat:** `streamChat` consumes an SSE stream and dispatches `token`/`metadata`/`done` events.
-- **Route protection:** the `(dashboard)` layout performs a client-side redirect to `/login` (no middleware).
 - **Design tokens** (`tailwind.config.ts`): `surface-0: #080A12`, accents blue `#60a5fa` / violet `#a78bfa` / teal `#2dd4bf`, plus custom utilities (`gradient-text`, `glass`, `hover-lift`) and animations (`typing-dot`, `orbit`, `fade-in`).
 
 ---
@@ -317,9 +311,7 @@ Applied in order in the FastAPI app:
 
 This is a student/portfolio project that aims for **production-style** engineering without yet being a hardened clinical product. The most important gaps, stated openly:
 
-- **Auth tokens live in `localStorage`** (key `safespace_token`) and are sent as `Authorization: Bearer`. Evolution: HttpOnly + Secure + SameSite cookies with short-lived access tokens (10–15 min) + refresh-token rotation to reduce XSS token-exfiltration risk.
-- **No server-side session/revocation.** JWTs stay valid until expiry, so a password change or account compromise has no kill switch, and logout is client-side only. Evolution: a `Sessions` table (session_id, refresh_token_hash, expires_at, revoked_at, device metadata) with the sid embedded in the JWT.
-- **Default JWT secret is `change-me-in-production`.** For safety, production startup should fail if the default is present (`raise RuntimeError` when `ENVIRONMENT == "production"`) and enforce minimum entropy. Never run the default in deployment.
+- **Authentication is currently disabled.** The app runs on a single shared anonymous account (no per-user boundaries). This simplifies demos; re-introducing auth (ideally HttpOnly cookies + refresh-token rotation) is on the roadmap so real users get private, per-account data.
 - **Risk detection is regex/rule-based only.** Deterministic rules are fast and always available, but they can miss indirect or contextual language (e.g. *"I don't think I'll be here tomorrow"*). Evolution: layered detection — rules (fast first layer) → contextual safety classifier → conversation-history analysis → final risk decision.
 - **Schema uses `Base.metadata.create_all()`**, which is fine for local demos but not a real migration strategy (no rollbacks / controlled schema evolution). Evolution: **Alembic** revisions (`alembic revision --autogenerate` → `alembic upgrade head` in CI/CD).
 - **No database indexes on hot query paths.** Add `messages(conversation_id, created_at DESC)`, `conversations(user_id, updated_at DESC)`, `mood_entries(user_id, created_at DESC)`, `crisis_escalations(user_id, created_at DESC)` so "load last 20 messages" and "my conversations" stay fast as data grows.
@@ -341,24 +333,22 @@ safespace-ai/
 |-- frontend/                    # Next.js 14 (App Router, TypeScript)
 |   |-- app/
 |   |   |-- page.tsx             # Landing page (/) — hero, features, finder, pipeline
-|   |   |-- login/               # /login
-|   |   |-- register/            # /register
-|   |   `-- (dashboard)/         # Protected route group (sidebar layout)
-|   |       |-- layout.tsx       # Auth guard + 280px sidebar + mobile drawer
+|   |   `-- (dashboard)/         # Route group (shared sidebar layout)
+|   |       |-- layout.tsx       # 280px sidebar + mobile drawer
 |   |       |-- chat/            # /chat — streaming chat UI (SSE)
 |   |       |-- dashboard/       # /dashboard — mood check-in, stats, quick actions
 |   |       |-- find-support/    # /find-support — healthcare provider search
 |   |       |-- resources/       # /resources — wellness info + hotlines
-|   |       `-- settings/        # /settings — profile, password, export, danger zone
+|   |       `-- settings/        # /settings — preferences, export, clear conversations
 |   |-- components/              # ApiKeyBanner, Toast (context)
-|   |-- lib/                     # api.ts (API client), auth.tsx (auth context)
+|   |-- lib/                     # api.ts (API client), auth.tsx (guest session context)
 |   |-- types/                   # TypeScript interfaces
 |   |-- tailwind.config.ts
 |   `-- package.json
 |
 |-- backend/
 |   |-- app/
-|   |   |-- api/                 # FastAPI routers (auth, chat, conversations, support,
+|   |   |-- api/                 # FastAPI routers (chat, conversations, support,
 |   |   |                        #   mood, settings, crisis)
 |   |   |-- agents/              # LangGraph orchestration + specialist tools + risk rules
 |   |   |-- core/                # config, database, security, llm, rate_limit,
@@ -453,9 +443,6 @@ Backend `.env`:
 | Variable | Default | Description |
 | -------- | ------- | ----------- |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./safespace.db` | Async DB connection string. Postgres via `postgresql+asyncpg://...` |
-| `JWT_SECRET_KEY` | `change-me-in-production` | JWT signing secret — **set a long random value in production** |
-| `JWT_ALGORITHM` | `HS256` | JWT signing algorithm |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | Access-token lifetime |
 | `NVIDIA_API_KEY` | `""` | NVIDIA API key (**primary LLM** provider) |
 | `NVIDIA_MODEL` | `nvidia/nemotron-3.5-lightning-30b-a3b` | NVIDIA model identifier |
 | `NVIDIA_BASE_URL` | `https://integrate.api.nvidia.com/v1` | NVIDIA `ChatOpenAI`-compatible base URL |
@@ -487,7 +474,7 @@ Base URL (production): `https://safespace-ai-api.onrender.com`
 
 All endpoints are prefixed with `/api/v1`. Interactive documentation is available at the [Swagger UI](https://safespace-ai-api.onrender.com/docs).
 
-**Authentication:** Every endpoint below requires an `Authorization: Bearer <token>` header **except** `POST /auth/register`, `POST /auth/login`, and the health endpoints. Obtain a token from register or login.
+**Authentication:** None — every endpoint is open and data is scoped to the shared anonymous user. Authentication is temporarily disabled (see [Roadmap](#roadmap)).
 
 **Content type:** `application/json`.
 
@@ -501,79 +488,22 @@ Quick index:
 
 | Method | Endpoint | Description |
 | ------ | -------- | ----------- |
-| POST | `/auth/register` | Create account, returns JWT |
-| POST | `/auth/login` | Login, returns JWT |
-| GET | `/auth/me` | Current user profile |
 | POST | `/chat` | Send message, get full AI response |
 | POST | `/chat/stream` | Send message, SSE-streamed response |
-| GET | `/conversations` | List current user's conversations |
+| GET | `/conversations` | List conversations |
 | GET | `/conversations/{id}` | Full conversation with messages |
 | DELETE | `/conversations/{id}` | Delete one conversation |
 | POST | `/support/search` | Search local healthcare resources by location |
 | POST | `/mood` | Create a mood check-in |
 | GET | `/mood` | List mood entries |
 | GET | `/mood/stats` | Mood statistics / trend |
-| GET | `/settings` | Get profile & preferences |
-| PUT | `/settings` | Update profile & preferences |
-| POST | `/settings/change-password` | Change password |
+| GET | `/settings` | Get preferences |
+| PUT | `/settings` | Update preferences |
 | DELETE | `/settings/conversations` | Delete all conversation history |
-| DELETE | `/settings/account` | Delete account |
 | POST | `/crisis/escalate` | Escalate a crisis (simulation by default) |
 | GET | `/crisis/twiml` | Twilio TwiML voice callback (hidden from OpenAPI) |
 | GET | `/health` | Health check |
 | GET | `/health/integrations` | Status of external integrations |
-
-### Authentication
-
-#### POST `/auth/register`
-
-Create an account and receive a JWT. Rate-limited: `5/minute`.
-
-**Request**
-
-```json
-{
-  "name": "Test User",
-  "email": "test@safespace.ai",
-  "password": "Test@1234Test@1234"
-}
-```
-
-**Constraints:** `name` 1–80 chars; `email` valid format; `password` 8–128 chars and must contain at least one digit.
-
-**Response `201`**
-
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIs...",
-  "token_type": "bearer",
-  "user": { "id": "1c547b40-...", "name": "Test User", "email": "test@safespace.ai" }
-}
-```
-
-#### POST `/auth/login`
-
-Log in and receive a JWT. Rate-limited: `5/minute`.
-
-**Request**
-
-```json
-{ "email": "test@safespace.ai", "password": "Test@1234Test@1234" }
-```
-
-**Response `200`** — same shape as register. **Errors:** `401` on invalid credentials.
-
-#### GET `/auth/me`
-
-Return the profile of the authenticated user.
-
-**Response `200`**
-
-```json
-{ "id": "1c547b40-...", "name": "Test User", "email": "test@safespace.ai" }
-```
-
-**Errors:** `401` if the token is missing/invalid.
 
 ### Chat
 
@@ -764,45 +694,29 @@ Mood statistics over a period. Query param `days` (default `14`).
 
 #### GET `/settings`
 
-Return the current user's profile and preferences.
+Return the shared session's preferences.
 
 **Response `200`**
 
 ```json
-{ "name": "Test User", "email": "test@safespace.ai", "theme": "dark", "email_notifications": true }
+{ "name": "Guest", "email": "guest@safespace.ai", "theme": "dark", "email_notifications": true }
 ```
 
 #### PUT `/settings`
 
-Update profile and preferences.
+Update preferences (theme, email notifications).
 
 **Request**
 
 ```json
-{ "name": "Test User", "email": "test@safespace.ai", "theme": "dark", "email_notifications": false }
+{ "theme": "dark", "email_notifications": false }
 ```
 
 **Response `200`** — updated settings object.
 
-#### POST `/settings/change-password`
-
-Change the password (requires the current one).
-
-**Request**
-
-```json
-{ "current_password": "OldPass1", "new_password": "NewPass123" }
-```
-
-- `new_password` must be ≥8 chars (and contain a digit). **Response `200`**. **Errors:** `400` if the current password is incorrect.
-
 #### DELETE `/settings/conversations`
 
-Delete **all** conversations and messages for the current user. **Response `200`**.
-
-#### DELETE `/settings/account`
-
-Delete the account (cascades messages, conversations, mood entries, and the user row). **Response `200`**.
+Delete **all** conversations and messages. **Response `200`**.
 
 ### Crisis
 
@@ -881,7 +795,6 @@ Rate limiting is enforced by SlowAPI when `RATE_LIMIT_ENABLED=true` (default). L
 
 | Endpoint | Limit |
 |----------|-------|
-| `POST /auth/register`, `POST /auth/login` | 5 / minute |
 | `POST /chat`, `POST /chat/stream` | 20 / minute |
 | `POST /crisis/escalate` | 5 / minute |
 
@@ -895,9 +808,7 @@ When exceeded, the API returns `429` with a `Retry-After` header:
 
 | Status | Meaning |
 |--------|---------|
-| `400` | Validation error, malformed body, wrong current password, missing crisis confirmation |
-| `401` | Missing/invalid token, or bad login credentials |
-| `403` | Accessing another user's resource (e.g. a conversation belonging to someone else) |
+| `400` | Validation error, malformed body, missing crisis confirmation |
 | `404` | Endpoint or resource not found |
 | `429` | Rate limit exceeded |
 | `500` | Server error |
@@ -1027,7 +938,6 @@ The frontend calls the backend through `NEXT_PUBLIC_API_URL` (set to `https://sa
 | Key | Production value / note |
 |-----|-------------------------|
 | `DATABASE_URL` | The Postgres asyncpg internal URL |
-| `JWT_SECRET_KEY` | **Long random value** (never the default) |
 | `NVIDIA_API_KEY` | NVIDIA Nemotron key (primary LLM) |
 | `GROQ_API_KEY` | Fallback LLM key |
 | `CORS_ORIGINS` | JSON list incl. Vercel alias + localhost |
@@ -1082,7 +992,7 @@ npx vercel --prod --yes --cwd "C:\Users\ayush\SafeSpaceAI"
 ### Known caveats
 
 1. **Git → Render auto-deploy webhook is missing** — the GitHub repo currently has no Render webhook, so pushes don't auto-deploy. Prior deploys did (`trigger: new_commit`), so the webhook is no longer registered. Deploy manually (above). To restore: Render dashboard → service → **Settings → Linked Repo** → re-link (regenerates the webhook), then verify a push auto-deploys.
-2. **Free-tier Postgres expires** (~30 days after creation). After that the DB and all accounts are unavailable until you upgrade or recreate + re-point `DATABASE_URL`.
+2. **Free-tier Postgres expires** (~30 days after creation). After that all conversation and mood data is unavailable until you upgrade or recreate + re-point `DATABASE_URL`.
 3. **Manual deploy does not re-sync `render.yaml` env vars** — `POST /deploys` builds the code but does not run the Render Blueprint env sync. Env vars must be applied directly on the service (env-vars endpoint or dashboard); they are not read from `render.yaml` for this manually-created Docker service.
 
 ### Local vs. production differences
@@ -1121,17 +1031,15 @@ if CONFIRM_REAL_CALL is False:
 
 - [x] Mood tracking (check-ins, spark-lines, streaks, trend)
 - [x] Healthcare finder (OSM Overpass + Photon fallback, Google Places optional)
-- [x] Persistent PostgreSQL accounts (fixes containerized-SQLite data loss)
+- [x] Persistent PostgreSQL (fixes containerized-SQLite data loss)
 - [x] Production deployment (Render backend + Vercel frontend)
 - [x] Consolidated architecture/API/deployment docs in this README
 
 **Priority 1 — security & safety hardening**
 
-- [ ] Move auth from `localStorage` to HttpOnly + Secure + SameSite cookies with refresh-token rotation and a server-side `Sessions` table (revocation)
-- [ ] Fail production startup if `JWT_SECRET_KEY` is the default (`change-me-in-production`)
+- [ ] Re-introduce per-user authentication (HttpOnly + Secure + SameSite cookies, refresh-token rotation, server-side `Sessions` table)
 - [ ] Add layered contextual safety classification (rules → classifier → conversation history)
 - [ ] Add structured logging (request_id, latency, status) and error monitoring (Sentry)
-- [ ] Rate-limit login attempts + breach-password checks; strengthen password policy
 
 **Priority 2 — scale & memory**
 

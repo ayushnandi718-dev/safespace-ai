@@ -25,7 +25,6 @@ import {
   Users,
   Zap,
 } from "lucide-react";
-import { useAuth } from "@/lib/auth";
 
 const pillars = [
   {
@@ -114,7 +113,6 @@ const demoMessages = [
 ] as const;
 
 function ChatDemo() {
-  const { user } = useAuth();
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [charCount, setCharCount] = useState(0);
@@ -179,7 +177,7 @@ function ChatDemo() {
             >
               <button
                 onClick={() =>
-                  router.push(user ? "/find-support?support_type=orthopedic" : "/register")
+                  router.push("/find-support?support_type=orthopedic")
                 }
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-accent-blue to-accent-violet text-white text-xs font-medium hover:opacity-90 transition-opacity"
               >
@@ -250,7 +248,6 @@ function Bubble({
 }
 
 function Navbar() {
-  const { user } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -295,29 +292,12 @@ function Navbar() {
                 {l.label}
               </Link>
             ))}
-            {user ? (
-              <Link
-                href="/dashboard"
-                className="px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-r from-accent-blue to-accent-violet text-white hover:opacity-90 transition-opacity"
-              >
-                Dashboard
-              </Link>
-            ) : (
-              <div className="flex items-center gap-3">
-                <Link
-                  href="/login"
-                  className="text-sm text-gray-300 hover:text-white transition-colors"
-                >
-                  Sign In
-                </Link>
-                <Link
-                  href="/register"
-                  className="px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-r from-accent-blue to-accent-violet text-white hover:opacity-90 transition-opacity"
-                >
-                  Get Started
-                </Link>
-              </div>
-            )}
+            <Link
+              href="/dashboard"
+              className="px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-r from-accent-blue to-accent-violet text-white hover:opacity-90 transition-opacity"
+            >
+              Dashboard
+            </Link>
           </div>
 
           <button
@@ -346,32 +326,13 @@ function Navbar() {
                 {l.label}
               </Link>
             ))}
-            {user ? (
-              <Link
-                href="/dashboard"
-                className="block px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-r from-accent-blue to-accent-violet text-white text-center"
-                onClick={() => setMobileOpen(false)}
-              >
-                Dashboard
-              </Link>
-            ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="block text-sm text-gray-400 hover:text-white"
-                  onClick={() => setMobileOpen(false)}
-                >
-                  Sign In
-                </Link>
-                <Link
-                  href="/register"
-                  className="block px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-r from-accent-blue to-accent-violet text-white text-center"
-                  onClick={() => setMobileOpen(false)}
-                >
-                  Get Started
-                </Link>
-              </>
-            )}
+            <Link
+              href="/dashboard"
+              className="block px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-r from-accent-blue to-accent-violet text-white text-center"
+              onClick={() => setMobileOpen(false)}
+            >
+              Dashboard
+            </Link>
           </div>
         </motion.div>
       )}
@@ -380,7 +341,6 @@ function Navbar() {
 }
 
 export default function LandingPage() {
-  const { user } = useAuth();
   const router = useRouter();
 
   return (
@@ -441,7 +401,7 @@ export default function LandingPage() {
                 className="flex flex-col sm:flex-row items-start gap-4 mb-8"
               >
                 <button
-                  onClick={() => router.push(user ? "/chat" : "/register")}
+                  onClick={() => router.push("/chat")}
                   className="px-7 py-3 rounded-xl bg-gradient-to-r from-accent-blue to-accent-violet text-white font-medium hover:opacity-90 transition-opacity flex items-center gap-2"
                 >
                   <MessageCircle className="w-4 h-4" />
@@ -594,7 +554,7 @@ export default function LandingPage() {
 
           <div className="mt-12 text-center">
             <button
-              onClick={() => router.push(user ? "/chat" : "/register")}
+              onClick={() => router.push("/chat")}
               className="px-7 py-3 rounded-xl bg-gradient-to-r from-accent-blue to-accent-violet text-white font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-2"
             >
               <MessageCircle className="w-4 h-4" />
@@ -797,7 +757,7 @@ export default function LandingPage() {
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <button
-                onClick={() => router.push(user ? "/chat" : "/register")}
+                onClick={() => router.push("/chat")}
                 className="px-8 py-3.5 rounded-xl bg-gradient-to-r from-accent-blue to-accent-violet text-white font-medium hover:opacity-90 transition-opacity flex items-center gap-2"
               >
                 <MessageCircle className="w-4 h-4" />
