@@ -10,8 +10,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "SafeSpace AI — Your Safe Space to Talk",
-  description: "AI-powered mental wellness platform providing compassionate support and professional resource discovery.",
+  title: "SafeSpace AI — Your AI Health, Wellness & Care Companion",
+  description: "Understand how you feel, get guidance on health questions, and find nearby doctors, clinics, hospitals and specialists — all in one trusted AI companion.",
 };
 
 export default function RootLayout({
