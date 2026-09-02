@@ -111,7 +111,7 @@ def _overpass_search(query: str, lat: float, lon: float, limit: int = 8) -> list
         terms.append('node["amenity"~"hospital|clinic"]')
     if "diagnostic" in q or "lab" in q:
         terms.append('node["amenity"="laboratory"]')
-    radius = 20000
+    radius = 15000
     terms.extend(_specialty_terms(q))
     union = "\n".join(t + f"(around:{radius},{lat},{lon});" for t in terms)
     data = (
@@ -128,7 +128,7 @@ def _overpass_search(query: str, lat: float, lon: float, limit: int = 8) -> list
         from concurrent.futures import ThreadPoolExecutor, as_completed
         def probe(endpoint: str):
             try:
-                resp = httpx.post(endpoint, data={"data": data}, headers=headers, timeout=20)
+                resp = httpx.post(endpoint, data={"data": data}, headers=headers, timeout=25)
                 if resp.status_code != 200:
                     return None
                 return resp.json().get("elements", [])
@@ -138,7 +138,7 @@ def _overpass_search(query: str, lat: float, lon: float, limit: int = 8) -> list
         items = None
         try:
             futures = [ex.submit(probe, ep) for ep in endpoints]
-            for fut in as_completed(futures, timeout=12):
+            for fut in as_completed(futures, timeout=22):
                 partial = fut.result()
                 if partial:
                     items = partial
@@ -300,8 +300,6 @@ def search_nearby_places(query: str, location: str) -> dict:
         "source": "unavailable",
         "query": normalized,
     }
-    if len(_SEARCH_CACHE) < 50:
-        _SEARCH_CACHE[cache_key] = result
     return result
 
 SUPPORT_QUERIES = {
