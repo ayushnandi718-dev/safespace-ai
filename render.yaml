@@ -8,7 +8,7 @@ services:
     healthCheckPath: /api/v1/health
     envVars:
       - key: DATABASE_URL
-        value: sqlite+aiosqlite:///./safespace.db
+        value: postgresql+asyncpg://safespace_pg_user:96tUJHEIzRvZ8sa5qKEwHewXIoNCRSmV@dpg-dabt1mjtqb8s73dg0ggg-a/safespace_pg
       - key: JWT_SECRET_KEY
         sync: false
       - key: GROQ_API_KEY
