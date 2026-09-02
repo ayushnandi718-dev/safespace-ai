@@ -33,8 +33,6 @@ The assistant is powered by **NVIDIA Nemotron 3.5 Lightning 30B A3B**, with supp
 - [Roadmap](#roadmap)
 - [License](#license)
 
-> The same detailed content also lives in standalone files under [`docs/`](docs/): [`ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`API.md`](docs/API.md), and [`DEPLOYMENT.md`](docs/DEPLOYMENT.md).
-
 ---
 
 ## Live URLs
@@ -296,11 +294,6 @@ safespace-ai/
 |   |-- Dockerfile
 |   |-- pyproject.toml
 |   `-- .env                     # local secrets (never commit)
-|
-|-- docs/
-|   |-- ARCHITECTURE.md          # Deep dive: multi-agent, data model, request flow
-|   |-- API.md                   # Full HTTP API reference
-|   `-- DEPLOYMENT.md            # Render + Vercel + Postgres deployment guide
 |
 |-- render.yaml                  # Render Blueprint configuration
 |-- .gitignore
@@ -878,7 +871,7 @@ Key design points:
 
 - **Heuristic + LLM intent classification.** A fast keyword heuristic (`_looks_like_location_search`) short-circuits obvious healthcare searches; ambiguous cases fall back to structured LLM classification (`IntentResult`).
 - **Risk gating happens before coaching.** `assess_risk()` (pure rules, no LLM) flags HIGH/IMMEDIATE language; those messages go straight to the crisis workflow and never reach a normal coaching response.
-- **Tools are actual LangChain `@tool`s** bound to a `create_react_agent`. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for details.
+- **Tools are actual LangChain `@tool`s** bound to a `create_react_agent`. See the [Multi-Agent Orchestration](#multi-agent-orchestration) section above.
 
 ---
 
@@ -1056,7 +1049,7 @@ if CONFIRM_REAL_CALL is False:
 - [ ] Voice input / output
 - [ ] Docker Compose for one-command local setup
 - [ ] CI/CD with automated tests
-- [ ] Restore Git→Render auto-deploy webhook (see [DEPLOYMENT.md](docs/DEPLOYMENT.md))
+- [ ] Restore Git→Render auto-deploy webhook (see [Deployment](#deployment))
 
 ---
 
