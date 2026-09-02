@@ -98,19 +98,32 @@ _HEALTHCARE_PATTERN = "|".join([
 
 def _overpass_search(query: str, lat: float, lon: float, limit: int = 8) -> list[dict]:
     q = normalize_search_query(query)
-    terms: list[str] = ['node["healthcare"]']
+    terms: list[str] = []
+    specific = False
     if any(t in q for t in ["doctor", "physician", "surgeon", "specialist", "ortho", "cardi", "neuro", "psychiat", "rheumat"]):
         terms.append('node["amenity"~"hospital|clinic|doctors|pharmacy"]')
+        terms.append('node["healthcare"~"clinic|doctors"]')
+        specific = True
     if "dentist" in q or "dental" in q:
         terms.append('node["amenity"="dentist"]')
+        terms.append('node["healthcare"="dentist"]')
+        specific = True
     if "pharma" in q or "chemist" in q or "medical store" in q:
         terms.append('node["amenity"="pharmacy"]')
+        terms.append('node["healthcare"="pharmacy"]')
+        specific = True
     if "physio" in q:
         terms.append('node["amenity"="physiotherapist"]')
-    if "hospital" in q or "nursing" in q:
+        specific = True
+    if "hospital" in q or "nursing" in q or "medical center" in q or "medical centre" in q:
         terms.append('node["amenity"~"hospital|clinic"]')
-    if "diagnostic" in q or "lab" in q:
+        terms.append('node["healthcare"="hospital"]')
+        specific = True
+    if "diagnostic" in q or "lab" in q or "blood test" in q:
         terms.append('node["amenity"="laboratory"]')
+        specific = True
+    if not specific:
+        terms.append('node["healthcare"]')
     radius = 15000
     terms.extend(_specialty_terms(q))
     union = "\n".join(t + f"(around:{radius},{lat},{lon});" for t in terms)
@@ -211,6 +224,69 @@ def _specialty_terms(q: str) -> list[str]:
         specs.append("dentistry")
     return [f'node["healthcare:speciality"~"{s}",i]' for s in specs]
 
+def _photon_search(query: str, lat: float, lon: float, place: str, limit: int = 8) -> list[dict]:
+    place_short = (place or "").split(",")[0].strip()
+    if not place_short:
+        return []
+    token = _photon_token(query)
+    q = f"{token} {place_short}" if token and token != place_short.lower() else place_short
+    keep = {
+        "hospital", "clinic", "doctors", "dentist", "pharmacy",
+        "physiotherapist", "health_centre", "healthcare", "laboratory",
+        "blood_bank", "nursing_home", "doctors_office",
+    }
+    try:
+        resp = httpx.get(
+            "https://photon.komoot.io/api/",
+            params={"q": q, "limit": limit, "lat": lat, "lon": lon, "lang": "en"},
+            headers={"User-Agent": "SafeSpaceAI/1.0 (safespace-ai@users.noreply.github.com)"},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            return []
+        items = resp.json().get("features", [])
+        results = []
+        for f in items:
+            p = f.get("properties", {}) or {}
+            name = (p.get("name") or "").strip()
+            if not name:
+                continue
+            ov = p.get("osm_value") or p.get("osm_key") or ""
+            geom = f.get("geometry", {}) or {}
+            coords = geom.get("coordinates") or []
+            if len(coords) < 2:
+                continue
+            clon, clat = coords[0], coords[1]
+            dist_km = ((clon - lon) ** 2 + (clat - lat) ** 2) ** 0.5 * 111.32
+            low = name.lower()
+            if ov not in keep and not any(k in low for k in ("hospital", "clinic", "pharmacy", "dent", "ortho")):
+                continue
+            if dist_km > 80:
+                continue
+            city = p.get("city") or p.get("state") or p.get("county") or place_short
+            address = f"{city or ''}".strip()
+            results.append(SupportResource(
+                name=name,
+                description=address or f"Health services in {place_short}.",
+                type=ov or "healthcare",
+                address=address or None,
+                maps_url=f"https://www.google.com/maps/search/?api=1&query={name} {place_short}",
+                source="openstreetmap",
+            ))
+        dedup: dict[str, SupportResource] = {}
+        for r in results:
+            dedup.setdefault(r.name.lower(), r)
+        return list(dedup.values())[:limit]
+    except Exception:
+        return []
+
+def _photon_token(query: str) -> str:
+    skip = {"doctor", "physician", "centre", "center", "clinic", "surgery", "provider", "care", "services"}
+    words = [w for w in (query or "").split() if w not in skip]
+    if not words:
+        return (query or "").split()[0] if query else ""
+    return " ".join(words)
+
 def _pick_phone(tags: dict) -> str | None:
     for key in ("contact:mobile", "contact:phone", "phone", "contact:landline"):
         v = (tags.get(key) or "").strip()
@@ -279,19 +355,28 @@ def search_nearby_places(query: str, location: str) -> dict:
                 "query": normalized,
             }
     coords = _geocode(location)
-    if coords:
-        overpass = _overpass_search(normalized, coords[0], coords[1])
-        if overpass:
-            result = {
-                "resources": overpass,
-                "message": f"Showing {normalized}s near {location}.",
-                "source": "openstreetmap",
-                "query": normalized,
-            }
-            if len(_SEARCH_CACHE) < 50:
-                _SEARCH_CACHE[cache_key] = result
-            return result
-    result = {
+    if not coords:
+        return {
+            "resources": [],
+            "message": (
+                f"I couldn't pinpoint {location} to search nearby services. "
+                "Could you share a more specific city or area?"
+            ),
+            "source": "unavailable",
+            "query": normalized,
+        }
+    resources = _search_overpass_or_photon(normalized, coords[0], coords[1], location)
+    if resources:
+        result = {
+            "resources": resources,
+            "message": f"Showing {normalized}s near {location}.",
+            "source": "openstreetmap",
+            "query": normalized,
+        }
+        if len(_SEARCH_CACHE) < 50:
+            _SEARCH_CACHE[cache_key] = result
+        return result
+    return {
         "resources": [],
         "message": (
             f"I couldn't retrieve live {normalized}s near {location} right now. "
@@ -300,7 +385,42 @@ def search_nearby_places(query: str, location: str) -> dict:
         "source": "unavailable",
         "query": normalized,
     }
-    return result
+
+def _search_overpass_or_photon(query: str, lat: float, lon: float, place: str) -> list[dict]:
+    import time as _time
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    ex = ThreadPoolExecutor(max_workers=2)
+    try:
+        of = ex.submit(_overpass_search, query, lat, lon)
+        pf = ex.submit(_photon_search, query, lat, lon, place)
+        photon_res: list[dict] = []
+        deadline = _time.monotonic() + 10
+        try:
+            for fut in as_completed({of, pf}, timeout=10):
+                val = fut.result() or []
+                if fut is of:
+                    if val:
+                        return val
+                else:
+                    photon_res = val
+                    grace = deadline - _time.monotonic()
+                    if grace > 2.5:
+                        grace = 2.5
+                    if grace > 0:
+                        try:
+                            for f2 in as_completed({of}, timeout=grace):
+                                ov = f2.result() or []
+                                if ov:
+                                    return ov
+                        except Exception:
+                            pass
+                    if photon_res:
+                        return photon_res
+        except Exception:
+            pass
+        return photon_res
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
 
 SUPPORT_QUERIES = {
     "therapist": "therapist mental health clinic",
