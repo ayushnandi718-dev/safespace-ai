@@ -63,28 +63,26 @@ def _twilio_send_alert():
         return True, f"Alert SMS sent to your emergency contact (SID {message.sid})."
     except Exception as exc:
         sms_error = f"{type(exc).__name__}"
-        if "template" in sms_error.lower() or "572006" in str(exc):
-            try:
-                twiml = (
-                    "<Response><Say voice=\"alice\">"
-                    f"{settings.EMERGENCY_CALL_MESSAGE}"
-                    "</Say></Response>"
-                )
-                call = client.calls.create(
-                    twiml=twiml,
-                    from_=settings.TWILIO_FROM_NUMBER,
-                    to=settings.EMERGENCY_CONTACT,
-                )
-                return True, (
-                    f"SMS is blocked on the Twilio trial plan, so a voice call was placed "
-                    f"to your emergency contact instead (SID {call.sid})."
-                )
-            except Exception as call_exc:
-                return False, (
-                    f"Unable to send the SMS ({sms_error}) and the follow-up voice call "
-                    f"also failed: {type(call_exc).__name__}."
-                )
-        return False, f"Unable to send the SMS: {sms_error}."
+        try:
+            twiml = (
+                "<Response><Say voice=\"alice\">"
+                f"{settings.EMERGENCY_CALL_MESSAGE}"
+                "</Say></Response>"
+            )
+            call = client.calls.create(
+                twiml=twiml,
+                from_=settings.TWILIO_FROM_NUMBER,
+                to=settings.EMERGENCY_CONTACT,
+            )
+            return True, (
+                f"SMS failed ({sms_error}), so a voice call was placed "
+                f"to your emergency contact instead (SID {call.sid})."
+            )
+        except Exception as call_exc:
+            return False, (
+                f"Unable to send the SMS ({sms_error}) and the follow-up voice call "
+                f"also failed: {type(call_exc).__name__}."
+            )
 
 def _twilio_call_contact():
     client = _twilio_client()
