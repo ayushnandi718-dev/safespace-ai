@@ -31,7 +31,7 @@ class CrisisActionResponse(BaseModel):
     simulation: bool
     escalation_id: Optional[str] = None
 
-def _twilio_send_alert():
+def _twilio_client():
     have_twilio = all([
         settings.TWILIO_ACCOUNT_SID,
         settings.TWILIO_AUTH_TOKEN,
@@ -39,10 +39,18 @@ def _twilio_send_alert():
         settings.EMERGENCY_CONTACT,
     ])
     if not have_twilio:
-        return False, "Twilio is not configured. No alert was sent."
+        return None
     try:
         from twilio.rest import Client as TwilioClient
-        client = TwilioClient(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+        return TwilioClient(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+    except Exception:
+        return None
+
+def _twilio_send_alert():
+    client = _twilio_client()
+    if client is None:
+        return False, "Twilio is not configured or not available. No alert was sent."
+    try:
         body = (
             settings.EMERGENCY_CALL_MESSAGE
             or "SafeSpace AI emergency alert: a user has requested urgent support. Reach out to them as soon as possible."
@@ -52,9 +60,50 @@ def _twilio_send_alert():
             from_=settings.TWILIO_FROM_NUMBER,
             to=settings.EMERGENCY_CONTACT,
         )
-        return True, f"Alert sent to your emergency contact (SID {message.sid})."
+        return True, f"Alert SMS sent to your emergency contact (SID {message.sid})."
     except Exception as exc:
-        return False, f"Unable to send the alert: {type(exc).__name__}."
+        sms_error = f"{type(exc).__name__}"
+        if "template" in sms_error.lower() or "572006" in str(exc):
+            try:
+                twiml = (
+                    "<Response><Say voice=\"alice\">"
+                    f"{settings.EMERGENCY_CALL_MESSAGE}"
+                    "</Say></Response>"
+                )
+                call = client.calls.create(
+                    twiml=twiml,
+                    from_=settings.TWILIO_FROM_NUMBER,
+                    to=settings.EMERGENCY_CONTACT,
+                )
+                return True, (
+                    f"SMS is blocked on the Twilio trial plan, so a voice call was placed "
+                    f"to your emergency contact instead (SID {call.sid})."
+                )
+            except Exception as call_exc:
+                return False, (
+                    f"Unable to send the SMS ({sms_error}) and the follow-up voice call "
+                    f"also failed: {type(call_exc).__name__}."
+                )
+        return False, f"Unable to send the SMS: {sms_error}."
+
+def _twilio_call_contact():
+    client = _twilio_client()
+    if client is None:
+        return False, "Twilio is not configured or not available. No call was placed."
+    try:
+        twiml = (
+            "<Response><Say voice=\"alice\">"
+            f"{settings.EMERGENCY_CALL_MESSAGE}"
+            "</Say></Response>"
+        )
+        call = client.calls.create(
+            twiml=twiml,
+            from_=settings.TWILIO_FROM_NUMBER,
+            to=settings.EMERGENCY_CONTACT,
+        )
+        return True, f"Voice call placed to your emergency contact (SID {call.sid})."
+    except Exception as exc:
+        return False, f"Unable to place the call: {type(exc).__name__}."
 
 @router.post("/escalate", response_model=CrisisActionResponse)
 @limiter.limit("5/minute")
@@ -85,27 +134,32 @@ async def escalate_crisis(
     simulation = not settings.CONFIRM_REAL_CALL
 
     if action_name == "call_emergency":
-        escalation = CrisisEscalation(
-            user_id=current_user.id,
-            conversation_id=data.conversation_id,
-            risk_level=data.risk_level,
-            action_requested=action_name,
-            action_completed="simulated" if simulation else "completed",
-            status="simulation" if simulation else "completed",
-            details="Emergency call escalation requested with explicit confirmation.",
-        )
-        db.add(escalation)
-        await db.commit()
-        await db.refresh(escalation)
         if simulation:
+            status_val = "simulation"
+            action_completed = "simulated"
             message = (
                 "Emergency call escalation was simulated. "
                 "No real call was placed. Please contact local emergency services if you are in danger."
             )
         else:
-            message = "Emergency services escalation requested. Please continue following local emergency guidance."
+            placed, call_message = _twilio_call_contact()
+            status_val = "sent" if placed else "failed"
+            action_completed = "completed" if placed else "failed"
+            message = call_message
+        escalation = CrisisEscalation(
+            user_id=current_user.id,
+            conversation_id=data.conversation_id,
+            risk_level=data.risk_level,
+            action_requested=action_name,
+            action_completed=action_completed,
+            status=status_val,
+            details=message,
+        )
+        db.add(escalation)
+        await db.commit()
+        await db.refresh(escalation)
         return CrisisActionResponse(
-            status="simulation" if simulation else "completed",
+            status=status_val,
             message=message,
             action=action_name,
             risk_level=data.risk_level,
