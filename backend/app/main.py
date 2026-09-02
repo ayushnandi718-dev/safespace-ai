@@ -62,3 +62,12 @@ app.include_router(settings_router.router, prefix="/api/v1/settings", tags=["Set
 @app.get("/api/v1/health")
 async def health_check():
     return {"status": "healthy", "service": "SafeSpace AI"}
+
+@app.get("/")
+async def root():
+    return {
+        "service": "SafeSpace AI API",
+        "message": "Welcome to the SafeSpace AI backend.",
+        "docs": "/docs",
+        "health": "/api/v1/health",
+    }
