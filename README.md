@@ -4,7 +4,7 @@
 
 SafeSpace AI is a full-stack, production-style application that combines a premium Next.js chat interface with a FastAPI backend and a LangGraph multi-agent orchestration system. Users chat with an empathetic AI assistant, discover local healthcare providers, track their mood over time, and receive safe, crisis-aware responses — all backed by secure authentication (JWT + bcrypt) and persistent conversation memory stored in PostgreSQL.
 
-> **Positioning:** SafeSpace AI is not just an LLM wrapper. It is a full-stack AI application that explores how deterministic safety systems, multi-agent orchestration, persistent memory, real-world search tools, and streaming infrastructure can work together in a production-style product.
+> **Positioning:** SafeSpace AI is not a chatbot wrapper. It is **"a safety-first multi-agent AI platform"** exploring deterministic risk routing, persistent memory, real-world tools, and streaming architecture — i.e. **AI systems engineering**, not just an LLM prompt. The quality of an AI product is determined not only by the model behind it, but by the systems built around it.
 
 The assistant is powered by **NVIDIA Nemotron 3.5 Lightning 30B A3B**, with support for several LLM backends via a single configuration flip.
 
@@ -88,57 +88,86 @@ The assistant is powered by **NVIDIA Nemotron 3.5 Lightning 30B A3B**, with supp
 ## Architecture
 
 ```mermaid
-flowchart TD
-    U[User]
+flowchart TB
 
-    F[Next.js Frontend]
+    USER([User])
 
-    API[FastAPI Backend]
+    subgraph FRONTEND["Frontend Layer"]
+        NEXT["Next.js 14<br/>React + TypeScript"]
+        AUTH_UI["Authentication UI"]
+        CHAT_UI["Streaming Chat UI"]
+        MOOD_UI["Mood Dashboard"]
+        SEARCH_UI["Healthcare Finder"]
+    end
 
-    AUTH[JWT Auth]
-    DB[(PostgreSQL)]
+    subgraph BACKEND["Backend Layer - FastAPI"]
+        API["REST API + SSE"]
 
-    RISK[Rule-Based Risk Assessment]
+        AUTH["JWT Authentication"]
+        RATE["Rate Limiting"]
+        SECURITY["Security Middleware"]
 
-    GRAPH[LangGraph Orchestrator]
+        RISK["Deterministic<br/>Risk Assessment"]
+        ROUTER["Intent Router"]
 
-    CRISIS[Crisis Safety Workflow]
-    SUPPORT[Emotional Support Agent]
-    SEARCH[Healthcare Search Tool]
-    THERAPIST[Therapist Finder]
+        GRAPH["LangGraph<br/>Orchestrator"]
 
-    NVIDIA[NVIDIA Nemotron]
-    GROQ[Groq Fallback]
+        CRISIS["Crisis Safety<br/>Workflow"]
+        SUPPORT["Emotional Support<br/>Agent"]
+        PROVIDER["Healthcare Search"]
+        THERAPIST["Therapist Finder"]
+    end
 
-    OSM[OpenStreetMap / Overpass / Photon]
-    GOOGLE[Google Places Optional]
+    subgraph DATA["Data Layer"]
+        POSTGRES[("PostgreSQL")]
+        CACHE[("Redis<br/>Future")]
+    end
 
-    U --> F
+    subgraph EXTERNAL["External Services"]
+        NVIDIA["NVIDIA Nemotron"]
+        GROQ["LLM Fallback"]
+        OSM["OpenStreetMap<br/>Overpass + Photon"]
+        GOOGLE["Google Places<br/>Optional"]
+    end
 
-    F -->|REST / SSE| API
+    USER --> NEXT
 
+    NEXT --> AUTH_UI
+    NEXT --> CHAT_UI
+    NEXT --> MOOD_UI
+    NEXT --> SEARCH_UI
+
+    NEXT -->|"HTTPS / REST / SSE"| API
+
+    API --> SECURITY
+    API --> RATE
     API --> AUTH
-    API --> DB
+
+    API --> POSTGRES
 
     API --> RISK
 
-    RISK -->|HIGH / IMMEDIATE| CRISIS
-    RISK -->|LOW / MODERATE| GRAPH
+    RISK -->|"HIGH / IMMEDIATE"| CRISIS
+    RISK -->|"LOW / MODERATE"| ROUTER
+
+    ROUTER --> GRAPH
 
     GRAPH --> SUPPORT
-    GRAPH --> SEARCH
+    GRAPH --> PROVIDER
     GRAPH --> THERAPIST
 
     SUPPORT --> NVIDIA
     SUPPORT -.Fallback.-> GROQ
 
-    SEARCH --> OSM
-    SEARCH -.Optional.-> GOOGLE
+    PROVIDER --> OSM
+    PROVIDER -.Optional.-> GOOGLE
 
     THERAPIST --> OSM
 
-    SUPPORT --> DB
-    CRISIS --> DB
+    SUPPORT --> POSTGRES
+    CRISIS --> POSTGRES
+
+    API -.Future.-> CACHE
 ```
 
 > The request pipeline is **safety-first**: a deterministic risk-assessment gate runs before any conversational generation, so `HIGH`/`IMMEDIATE` messages are routed into a dedicated crisis workflow instead of a normal coaching prompt.
@@ -288,10 +317,15 @@ Applied in order in the FastAPI app:
 
 This is a student/portfolio project that aims for **production-style** engineering without yet being a hardened clinical product. The most important gaps, stated openly:
 
-- **Auth tokens live in `localStorage`** (key `safespace_token`) and are sent as `Authorization: Bearer`. Evolution: HttpOnly + Secure + SameSite cookies with short-lived access tokens and refresh-token rotation to reduce XSS token-exfiltration risk.
+- **Auth tokens live in `localStorage`** (key `safespace_token`) and are sent as `Authorization: Bearer`. Evolution: HttpOnly + Secure + SameSite cookies with short-lived access tokens (10–15 min) + refresh-token rotation to reduce XSS token-exfiltration risk.
+- **No server-side session/revocation.** JWTs stay valid until expiry, so a password change or account compromise has no kill switch, and logout is client-side only. Evolution: a `Sessions` table (session_id, refresh_token_hash, expires_at, revoked_at, device metadata) with the sid embedded in the JWT.
+- **Default JWT secret is `change-me-in-production`.** For safety, production startup should fail if the default is present (`raise RuntimeError` when `ENVIRONMENT == "production"`) and enforce minimum entropy. Never run the default in deployment.
 - **Risk detection is regex/rule-based only.** Deterministic rules are fast and always available, but they can miss indirect or contextual language (e.g. *"I don't think I'll be here tomorrow"*). Evolution: layered detection — rules (fast first layer) → contextual safety classifier → conversation-history analysis → final risk decision.
+- **Schema uses `Base.metadata.create_all()`**, which is fine for local demos but not a real migration strategy (no rollbacks / controlled schema evolution). Evolution: **Alembic** revisions (`alembic revision --autogenerate` → `alembic upgrade head` in CI/CD).
+- **No database indexes on hot query paths.** Add `messages(conversation_id, created_at DESC)`, `conversations(user_id, updated_at DESC)`, `mood_entries(user_id, created_at DESC)`, `crisis_escalations(user_id, created_at DESC)` so "load last 20 messages" and "my conversations" stay fast as data grows.
 - **Conversation context is bounded to the last 20 messages.** Full-history summarization (rolling summary + recent messages + key preferences) is the next step.
 - **Search depends on third-party APIs** (OpenStreetMap Overpass/Photon, optional Google Places) with public rate limits and availability variance. Results are cached; a Redis cache layer would harden this.
+- **Rate limiting (SlowAPI) is per-instance** — a shared store (Redis) is needed for distributed deployments.
 - **Free-tier hosting** (Render + PostgreSQL) has cold starts and a Postgres expiry (~30 days). A paid plan is needed for persistent, always-on production use.
 - **Observability is minimal.** Structured logging (request_id / user / latency) and error monitoring (e.g. Sentry) are the biggest production-readiness gaps.
 
@@ -1093,16 +1127,18 @@ if CONFIRM_REAL_CALL is False:
 
 **Priority 1 — security & safety hardening**
 
-- [ ] Move auth from `localStorage` to HttpOnly + Secure + SameSite cookies with refresh-token rotation
+- [ ] Move auth from `localStorage` to HttpOnly + Secure + SameSite cookies with refresh-token rotation and a server-side `Sessions` table (revocation)
+- [ ] Fail production startup if `JWT_SECRET_KEY` is the default (`change-me-in-production`)
 - [ ] Add layered contextual safety classification (rules → classifier → conversation history)
 - [ ] Add structured logging (request_id, latency, status) and error monitoring (Sentry)
 - [ ] Rate-limit login attempts + breach-password checks; strengthen password policy
 
 **Priority 2 — scale & memory**
 
-- [ ] Redis caching for healthcare search / geocoding
+- [ ] Alembic migrations (replace `create_all()`) with `autogenerate` + `upgrade head` in CI/CD
+- [ ] Database indexes (`messages(conversation_id, created_at)`, `mood_entries(user_id, created_at)`, `conversations(user_id, updated_at)`, `crisis_escalations(user_id, created_at)`)
+- [ ] Redis caching for healthcare search / geocoding + shared rate limiting
 - [ ] Conversation summarization (rolling summary + recent messages)
-- [ ] Database indexes (`messages(conversation_id, created_at)`, `mood_entries(user_id, created_at)`, …)
 - [ ] Background jobs / workers
 
 **Priority 3 — product & platform**
