@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
-from typing import List
+from typing import Any, List
+import json
 
 class Settings(BaseSettings):
     # SQLite is the zero-config default for local demos.
@@ -18,9 +19,31 @@ class Settings(BaseSettings):
     TWILIO_FROM_NUMBER: str = ""
     EMERGENCY_CONTACT: str = ""
     CONFIRM_REAL_CALL: bool = False
-    CORS_ORIGINS: List[str] = ["http://localhost:3000"]
+    CORS_ORIGINS: str = '["http://localhost:3000"]'
     RATE_LIMIT_ENABLED: bool = True
     RENDER_API_KEY: str = ""
+
+    @property
+    def cors_origins_list(self) -> List[str]:
+        return self._parse_cors_origins(self.CORS_ORIGINS)
+
+    @staticmethod
+    def _parse_cors_origins(v: Any) -> List[str]:
+        if v is None:
+            return ["http://localhost:3000"]
+        if isinstance(v, (list, tuple)):
+            return list(v)
+        s = str(v).strip()
+        if not s:
+            return ["http://localhost:3000"]
+        try:
+            parsed = json.loads(s)
+            if isinstance(parsed, list):
+                return parsed
+        except (ValueError, TypeError):
+            pass
+        cleaned = s.strip().strip("[]'\"")
+        return [o.strip().strip("\"'") for o in cleaned.split(",") if o.strip().strip("\"'")]
 
     class Config:
         env_file = ".env"
