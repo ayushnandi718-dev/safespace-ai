@@ -15,16 +15,20 @@ import {
   Menu,
   X,
   ChevronRight,
+  LifeBuoy,
+  Plus,
+  MoreVertical,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import ApiKeyBanner from "@/components/ApiKeyBanner";
 
 const navItems = [
-  { href: "/chat", label: "New Conversation", icon: MessageCircle },
+  { href: "/chat", label: "Conversations", icon: MessageCircle },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/find-support", label: "Find Healthcare", icon: Search },
-  { href: "/resources", label: "Resources", icon: BookOpen },
+  { href: "/resources", label: "Wellness Resources", icon: BookOpen },
   { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/resources", label: "Help & Support", icon: LifeBuoy },
 ];
 
 export default function DashboardLayout({
@@ -63,33 +67,48 @@ export default function DashboardLayout({
   if (!user) return null;
 
   const Sidebar = () => (
-    <div className="flex flex-col h-full bg-surface-1 border-r border-white/5 w-64">
-      <div className="p-5 border-b border-white/5">
+    <div className="flex flex-col h-full bg-surface-1 border-r border-white/5 w-[280px]">
+      <div className="p-5 pb-4 border-b border-white/5">
         <Link href="/" className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-accent-blue to-accent-violet flex items-center justify-center">
-            <Shield className="w-4.5 h-4.5 text-white" />
+          <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-accent-blue to-accent-violet flex items-center justify-center">
+            <div className="absolute inset-0 rounded-xl bg-accent-blue/40 blur-md" />
+            <Shield className="relative w-4.5 h-4.5 text-white" />
           </div>
           <span className="text-base font-semibold gradient-text">
             SafeSpace AI
           </span>
         </Link>
+        <p className="mt-2 text-[11px] text-gray-500">Your Safe Space to Talk</p>
       </div>
 
-      <nav className="flex-1 p-3 space-y-1">
+      <div className="p-3">
+        <Link
+          href="/chat"
+          className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl bg-gradient-to-r from-accent-blue to-accent-violet text-white text-sm font-medium shadow-lg shadow-accent-blue/20 hover:opacity-90 transition-opacity"
+        >
+          <Plus className="w-4 h-4" />
+          New Conversation
+        </Link>
+      </div>
+
+      <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const isActive =
             pathname === item.href ||
             (item.href !== "/chat" && pathname.startsWith(item.href));
           return (
             <Link
-              key={item.href}
+              key={item.label}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 ${
+              className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 ${
                 isActive
                   ? "bg-brand-600/15 text-accent-blue"
                   : "text-gray-400 hover:text-white hover:bg-white/5"
               }`}
             >
+              {isActive && (
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full bg-gradient-to-b from-accent-blue to-accent-violet" />
+              )}
               <item.icon className="w-4.5 h-4.5" />
               <span className="flex-1">{item.label}</span>
               {isActive && (
@@ -100,20 +119,39 @@ export default function DashboardLayout({
         })}
       </nav>
 
-      <div className="p-3 border-t border-white/5">
-        <div className="px-3 py-2 mb-2">
-          <p className="text-sm font-medium text-white truncate">
-            {user.name}
+      <div className="px-3 pb-3">
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-brand-600/10 to-accent-violet/10 border border-white/5">
+          <p className="text-sm font-medium text-white">You matter.</p>
+          <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+            We&apos;re here for you, whenever you need.
           </p>
-          <p className="text-xs text-gray-500 truncate">{user.email}</p>
         </div>
-        <button
-          onClick={logout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-400 hover:text-red-400 hover:bg-red-500/5 transition-all"
-        >
-          <LogOut className="w-4.5 h-4.5" />
-          Sign Out
-        </button>
+      </div>
+
+      <div className="px-3 pb-3 pt-3 border-t border-white/5">
+        <div className="flex items-center gap-3 px-2 py-2">
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-accent-violet to-accent-teal flex items-center justify-center shrink-0">
+            <span className="text-xs font-bold text-white">
+              {(user.name || "U").slice(0, 2).toUpperCase()}
+            </span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-white truncate">
+              {user.name}
+            </p>
+            <p className="text-xs text-gray-500 truncate">{user.email}</p>
+          </div>
+          <button className="text-gray-500 hover:text-gray-300 transition-colors">
+            <MoreVertical className="w-4 h-4" />
+          </button>
+          <button
+            onClick={logout}
+            title="Sign out"
+            className="text-gray-500 hover:text-red-400 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -121,7 +159,7 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen flex bg-surface-0">
       {/* Desktop sidebar */}
-      <div className="hidden lg:flex lg:w-64 lg:shrink-0">
+      <div className="hidden lg:flex lg:w-[280px] lg:shrink-0">
         <Sidebar />
       </div>
 
