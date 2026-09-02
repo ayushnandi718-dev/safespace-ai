@@ -379,8 +379,10 @@ def search_nearby_places(query: str, location: str) -> dict:
     return {
         "resources": [],
         "message": (
-            f"I couldn't retrieve live {normalized}s near {location} right now. "
-            "Please try again in a moment, or refine your location."
+            f"I couldn't find {normalized}s mapped in {location} yet. "
+            "This area may have limited public coverage. "
+            "Try a nearby larger city, or a broader search term like "
+            f"doctors, clinics, or hospitals."
         ),
         "source": "unavailable",
         "query": normalized,

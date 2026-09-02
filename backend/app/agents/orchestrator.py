@@ -185,8 +185,10 @@ def _format_search_result(result: dict, location: str) -> str:
     query = result.get("query", "provider")
     if not resources:
         return (
-            f"I couldn't retrieve live {query} results near {location} right now. "
-            "Please try again in a moment or refine your location. "
+            f"I couldn't find {query}s mapped in {location}. "
+            "This can happen when a smaller town has limited public "
+            "healthcare listings. Try a nearby larger city, or widen your "
+            "search to doctors, clinics, or hospitals. "
             "For urgent care, call your local emergency number."
         )
     lines = [f"Here are {query}s near {location}:"]
