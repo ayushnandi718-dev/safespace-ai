@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback, type KeyboardEvent } from "react";
+import { Suspense, useEffect, useState, useRef, useCallback, type KeyboardEvent } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -542,7 +542,7 @@ function timeLabel(iso: string): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-export default function ChatPage() {
+function ChatPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const initialConvoId = searchParams.get("conversation");
@@ -985,5 +985,13 @@ export default function ChatPage() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center text-[var(--text-muted)]">Loading chat...</div>}>
+      <ChatPageContent />
+    </Suspense>
   );
 }

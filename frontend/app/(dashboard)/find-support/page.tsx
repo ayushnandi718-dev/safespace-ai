@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { Suspense, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -57,7 +57,7 @@ function categoryQuery(value: string): string | undefined {
   return supportTypes.find((st) => st.value === value)?.query;
 }
 
-export default function FindSupportPage() {
+function FindSupportContent() {
   const searchParams = useSearchParams();
   const [location, setLocation] = useState("");
   const [supportType, setSupportType] = useState(
@@ -296,5 +296,13 @@ export default function FindSupportPage() {
         </motion.div>
       )}
     </div>
+  );
+}
+
+export default function FindSupportPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center text-[var(--text-muted)]">Loading...</div>}>
+      <FindSupportContent />
+    </Suspense>
   );
 }
