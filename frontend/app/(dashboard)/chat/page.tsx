@@ -381,8 +381,8 @@ function EmptyState({ onSend }: { onSend: (msg: string) => void }) {
   const suggestions = [
     "I've been feeling anxious about exams",
     "How can I manage work stress?",
-    "I need help coping with burnout",
-    "Can you help me with sleep issues?",
+    "Find a doctor near Alipurduar",
+    "I need a dentist around Kolkata",
   ];
 
   return (
@@ -399,16 +399,21 @@ function EmptyState({ onSend }: { onSend: (msg: string) => void }) {
           Start a conversation
         </h2>
         <p className="text-sm text-gray-400 mb-6">
-          Share what&apos;s on your mind. SafeSpace AI is here to listen and
-          support you.
+          Share what&apos;s on your mind, or ask me to find local healthcare
+          near you.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {suggestions.map((s) => (
             <button
               key={s}
               onClick={() => onSend(s)}
-              className="text-left px-4 py-3 rounded-xl bg-surface-1 border border-white/5 text-sm text-gray-300 hover:bg-surface-2 hover:border-white/10 transition-all"
+              className="inline-flex items-center gap-2 text-left px-4 py-3 rounded-xl bg-surface-1 border border-white/5 text-sm text-gray-300 hover:bg-surface-2 hover:border-white/10 transition-all"
             >
+              {s.startsWith("Find") || s.startsWith("I need") ? (
+                <MapPin className="w-3.5 h-3.5 text-accent-teal shrink-0" />
+              ) : (
+                <MessageCircle className="w-3.5 h-3.5 text-accent-blue shrink-0" />
+              )}
               {s}
             </button>
           ))}
@@ -748,7 +753,7 @@ export default function ChatPage() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Share what's on your mind..."
+                placeholder="Share what's on your mind or ask to find local healthcare..."
                 rows={1}
                 className="flex-1 bg-transparent text-sm text-white placeholder-gray-500 resize-none focus:outline-none max-h-32"
                 style={{ minHeight: "24px" }}
@@ -768,7 +773,8 @@ export default function ChatPage() {
             </div>
             <p className="text-[10px] text-gray-600 text-center mt-2">
               SafeSpace AI is not a substitute for professional care. If you are
-              in immediate danger, please contact emergency services.
+              in immediate danger, please contact emergency services. Local
+              search results come from OpenStreetMap / Photon and may be limited.
             </p>
           </div>
         </div>

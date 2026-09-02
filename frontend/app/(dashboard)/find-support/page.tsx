@@ -201,9 +201,20 @@ export default function FindSupportPage() {
           {resources.length === 0 ? (
             <div className="p-8 rounded-2xl bg-surface-1 border border-white/5 text-center">
               <Building2 className="w-10 h-10 text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-400 text-sm">
-                No resources found for this location. Try a different search.
+              <p className="text-gray-400 text-sm mb-2">
+                No verified resources found for this location and category.
               </p>
+              <p className="text-xs text-gray-500 max-w-md mx-auto">
+                Coverage is sourced from OpenStreetMap and Photon. Results
+                depend on what is publicly mapped in your area. Try a broader
+                search term or a nearby city, or ask in chat instead.
+              </p>
+              <a
+                href="/chat?prompt=I%20need%20to%20find%20healthcare%20near%20me"
+                className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-accent-blue to-accent-violet text-white text-xs font-medium hover:opacity-90 transition-opacity"
+              >
+                Try in chat
+              </a>
             </div>
           ) : (
             <div className="grid sm:grid-cols-2 gap-4">
